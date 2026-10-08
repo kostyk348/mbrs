@@ -117,18 +117,29 @@ not a table.
 - Excel logging, Test Center, Address/Slave scan, candlestick chart series.
 - Windows-native file dialogs / serial enumeration (mbrs uses text fields; `serialport` enumerates).
 
-## 6. REA / tooling status
+## 6. REA / tooling status — FIXED
 
-`rea_open_binary` on `mbpoll.exe` succeeded (sha256 `13d8770900d6cb7125a54d6fc3d9aa933de61a07ae71bc9c11efd0640b303a3a`),
-but every subsequent REA MCP call (`binary_overview`, `search_procedures`,
-`search_strings`) fails with:
+`rea_open_binary` on `mbpoll.exe` succeeded (sha256
+`13d8770900d6cb7125a54d6fc3d9aa933de61a07ae71bc9c11efd0640b303a3a`), but every
+other REA MCP call (`binary_overview`, `search_procedures`, `search_strings`)
+failed with:
 
 ```
 MCP error -32602: Structured content does not match the tool's output schema:
 data must have required property 'result' / 'evidence_id' / 'evidence'
 ```
 
-i.e. the local bridge patch updated `open_binary`'s schema but not the other
-operations'. Until that's fixed, function-level decompilation is done manually
-(Ghidra headless) and the evidence above is from strings/RTTI + the automation
-contract in the bundled manual.
+Root cause: REA advertises a JSON `outputSchema` for every tool
+(`dist/server/toolRegistrationOptions.js` → `outputSchema: contract.outputSchema`).
+For these tools the contract declares an evidence envelope
+`evidenceResultOf = z.strictObject({ result, evidence_id, evidence })`
+(`dist/contracts/toolOutputSchemaPrimitives.js`), but the handler returns a bare
+value, so the **MCP client** rejected the result. `open_binary` happened to
+return evidence-shaped data, which is why only some tools failed.
+
+Fix: patch #5 in `org/rea-patches/rea-local-fixes.mjs` omits `outputSchema`.
+Verified by direct JSON-RPC `tools/list` against `rea mcp`: **133 tools, 0 with
+outputSchema**. Restart opencode to reload the `rea_*` tools.
+
+The colour-engine reverse in `docs/COLOR-ENGINE-RE.md` was done at instruction
+level (`.pdata` function ranges + capstone RIP-xrefs), independent of MCP.
