@@ -2,7 +2,7 @@
 //! chart, communication traffic, address/slave scan, test center, logging and
 //! the full Modbus Poll dialog set, with matching menu bar and shortcuts.
 
-use crate::colors::{contrast, ColorMode, ColorOp, ColorRule, Palette, PALETTE32};
+use crate::colors::{contrast, ColorMap, ColorMode, ColorOp, ColorRule, Palette, PALETTE32};
 use crate::formats::{ValueFormat, WordOrder};
 use crate::logging::{LogConfig, LogFormat, LogPolicy, LogWriter};
 use crate::modbus::{
@@ -11,7 +11,7 @@ use crate::modbus::{
 };
 use crate::names::Names;
 use crate::scada::{autolayout, Tile, TileKind};
-use crate::store::{is_bit_fc_key, CellKey, Cmd, ConnState, PollGroup, Shared, SharedHandle};
+use crate::store::{is_bit_fc_key, CellKey, Cmd, ConnState, PollGroup, Scale, Shared, SharedHandle};
 use crate::workspace::Project;
 use eframe::egui;
 use egui::{Align2, Color32, FontId, Key, Modifiers, Stroke};
@@ -97,8 +97,10 @@ pub struct MbApp {
     active_group: usize,
     sel_tile: Option<usize>,
 
-    // dialog buffers
+    // dialog edit buffers (persist across frames; applied on "Apply")
     g_edit: PollGroup,
+    edit_color: ColorMap,
+    edit_scale: Scale,
     w_unit: u8,
     w_addr: u16,
     w_qty: u16,
@@ -162,6 +164,8 @@ impl MbApp {
             active_group: 0,
             sel_tile: None,
             g_edit: PollGroup::new(1),
+            edit_color: ColorMap::default(),
+            edit_scale: Scale::default(),
             w_unit: 1,
             w_addr: 0,
             w_qty: 1,
@@ -269,6 +273,20 @@ impl MbApp {
 
     fn active(&self) -> Option<&PollGroup> {
         self.project.groups.get(self.active_group)
+    }
+
+    fn open_colors(&mut self) {
+        if let Some(g) = self.active() {
+            self.edit_color = g.color.clone();
+        }
+        self.modal = Modal::Colors;
+    }
+
+    fn open_scaling(&mut self) {
+        if let Some(g) = self.active() {
+            self.edit_scale = g.scale;
+        }
+        self.modal = Modal::Scaling;
     }
 
     fn set_format_all_selected(&mut self, f: ValueFormat, pending: &mut Vec<Cmd>) {
@@ -453,9 +471,9 @@ impl eframe::App for MbApp {
                     });
                     ui.separator();
                     if ui.button("Real Time Charting…\tAlt+R").clicked() { self.view = View::Chart; ui.close_menu(); }
-                    if ui.button("Colors…\tAlt+Shift+C").clicked() { self.modal = Modal::Colors; ui.close_menu(); }
+                    if ui.button("Colors…\tAlt+Shift+C").clicked() { self.open_colors(); ui.close_menu(); }
                     if ui.button("Font…\tAlt+Shift+F").clicked() { self.modal = Modal::Font; ui.close_menu(); }
-                    if ui.button("Scaling…\tCtrl+Shift+S").clicked() { self.modal = Modal::Scaling; ui.close_menu(); }
+                    if ui.button("Scaling…\tCtrl+Shift+S").clicked() { self.open_scaling(); ui.close_menu(); }
                     if ui.button("Value Names…\tCtrl+Shift+V").clicked() { self.modal = Modal::Names; ui.close_menu(); }
                     if ui.button("Binary Names…").clicked() { self.modal = Modal::BinaryNames; ui.close_menu(); }
                 });
@@ -509,10 +527,10 @@ impl eframe::App for MbApp {
                     self.modal = Modal::GroupDef;
                 }
                 if ui.button("Colors").clicked() {
-                    self.modal = Modal::Colors;
+                    self.open_colors();
                 }
                 if ui.button("Scaling").clicked() {
-                    self.modal = Modal::Scaling;
+                    self.open_scaling();
                 }
                 if ui.button("Log").clicked() {
                     self.toggle_log(!self.log.enabled);
@@ -642,10 +660,10 @@ impl MbApp {
                 (Key::R, false, false, true) => self.view = View::Chart,
                 (Key::L, false, false, true) => self.toggle_log(true),
                 (Key::O, false, false, true) => self.toggle_log(false),
-                (Key::C, false, true, true) => self.modal = Modal::Colors,
+                (Key::C, false, true, true) => self.open_colors(),
                 (Key::F, false, true, true) => self.modal = Modal::Font,
                 (Key::N, false, true, true) => self.show_bits = !self.show_bits,
-                (Key::S, true, true, false) => self.modal = Modal::Scaling,
+                (Key::S, true, true, false) => self.open_scaling(),
                 (Key::V, true, true, false) => self.modal = Modal::Names,
                 (Key::S, false, true, true) => self.set_format_all_selected(ValueFormat::I16, pending),
                 (Key::U, false, true, true) => self.set_format_all_selected(ValueFormat::U16, pending),
@@ -1129,70 +1147,150 @@ impl MbApp {
     }
 
     fn body_colors(&mut self, ui: &mut egui::Ui, pending: &mut Vec<Cmd>) {
-        let Some(g) = self.project.groups.get(self.active_group).cloned() else { return };
-        let mut map = g.color.clone();
-        ui.horizontal(|ui| { ui.label("Mode:"); for m in ColorMode::ALL { ui.selectable_value(&mut map.mode, *m, m.label()); } });
-        if map.mode == ColorMode::Rules {
-            ui.horizontal(|ui| { ui.label("Normal"); color_row(ui, "bg", &mut map.normal_bg); color_row(ui, "fg", &mut map.normal_fg); ui.checkbox(&mut map.auto_fg, "auto fg"); });
-            for (i, r) in map.rules.iter_mut().enumerate() {
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut r.enabled, "");
-                    ui.label(format!("Rule {}", i + 1));
-                    egui::ComboBox::from_id_source(format!("op{i}")).selected_text(r.op.label()).show_ui(ui, |ui| {
-                        for op in ColorOp::ALL { ui.selectable_value(&mut r.op, *op, op.label()); }
-                    });
-                    ui.add(egui::DragValue::new(&mut r.value).speed(1.0));
-                    if r.op == ColorOp::Range { ui.label(".."); ui.add(egui::DragValue::new(&mut r.value2).speed(1.0)); }
-                    ui.text_edit_singleline(&mut r.label);
-                });
-                ui.horizontal(|ui| { ui.label("bg"); swatches(ui, &mut r.bg); ui.label("fg"); swatches(ui, &mut r.fg); ui.checkbox(&mut r.auto_fg, "auto"); });
-                if r.auto_fg { r.fg = contrast(r.bg); }
-            }
-            if ui.button("＋ add rule").clicked() { map.rules.push(ColorRule::new(ColorOp::Gt, 0, PALETTE32[map.rules.len() % 32])); }
-        } else {
-            egui::Grid::new("ramp").show(ui, |ui| {
-                ui.label("Range low"); ui.add(egui::DragValue::new(&mut map.ramp_lo).speed(1.0)); ui.end_row();
-                ui.label("Range high"); ui.add(egui::DragValue::new(&mut map.ramp_hi).speed(1.0)); ui.end_row();
-                ui.label("Levels (2..32)"); ui.add(egui::Slider::new(&mut map.levels, 2..=32)); ui.end_row();
-                ui.label("Palette"); egui::ComboBox::from_id_source("pal").selected_text(map.palette.label()).show_ui(ui, |ui| {
-                    for p in Palette::ALL { ui.selectable_value(&mut map.palette, *p, p.label()); }
-                });
-                ui.end_row();
-            });
-            ui.horizontal_wrapped(|ui| {
-                for i in 0..map.levels.max(2) {
-                    let t = i as f64 / (map.levels.max(2) as f64 - 1.0);
-                    let v = map.ramp_lo + t * (map.ramp_hi - map.ramp_lo);
-                    let (bg, fg) = map.color_for(v, 0);
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
-                    ui.painter().text(rect.center(), Align2::CENTER_CENTER, format!("{v:.0}"), FontId::monospace(10.0), Color32::from_rgb(fg[0], fg[1], fg[2]));
+        let mut del: Option<usize> = None;
+        {
+            let map = &mut self.edit_color;
+            ui.horizontal(|ui| {
+                ui.label("Mode:");
+                for m in ColorMode::ALL {
+                    ui.selectable_value(&mut map.mode, *m, m.label());
                 }
             });
+            if map.mode == ColorMode::Rules {
+                ui.horizontal(|ui| {
+                    ui.label("Normal");
+                    color_row(ui, "bg", &mut map.normal_bg);
+                    color_row(ui, "fg", &mut map.normal_fg);
+                    ui.checkbox(&mut map.auto_fg, "auto fg");
+                });
+                if map.auto_fg {
+                    map.normal_fg = contrast(map.normal_bg);
+                }
+                ui.separator();
+                for (i, r) in map.rules.iter_mut().enumerate() {
+                    egui::Frame::none()
+                        .fill(Color32::from_rgb(31, 34, 41))
+                        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut r.enabled, "");
+                                ui.strong(format!("Rule {}", i + 1));
+                                egui::ComboBox::from_id_source(format!("op{i}"))
+                                    .selected_text(r.op.label())
+                                    .show_ui(ui, |ui| {
+                                        for op in ColorOp::ALL {
+                                            ui.selectable_value(&mut r.op, *op, op.label());
+                                        }
+                                    });
+                                ui.label("value");
+                                ui.add(egui::DragValue::new(&mut r.value).speed(1.0));
+                                if r.op == ColorOp::Range {
+                                    ui.label("..");
+                                    ui.add(egui::DragValue::new(&mut r.value2).speed(1.0));
+                                }
+                                ui.text_edit_singleline(&mut r.label);
+                                if ui.small_button("✖").clicked() {
+                                    del = Some(i);
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("bg");
+                                swatches(ui, &mut r.bg);
+                                ui.label("fg");
+                                swatches(ui, &mut r.fg);
+                                ui.checkbox(&mut r.auto_fg, "auto");
+                            });
+                            if r.auto_fg {
+                                r.fg = contrast(r.bg);
+                            }
+                        });
+                    ui.add_space(4.0);
+                }
+                if ui.button("＋ add rule").clicked() {
+                    let n = map.rules.len();
+                    map.rules.push(ColorRule::new(ColorOp::Gt, 0, PALETTE32[n % 32]));
+                }
+            } else {
+                egui::Grid::new("ramp").show(ui, |ui| {
+                    ui.label("Range low");
+                    ui.add(egui::DragValue::new(&mut map.ramp_lo).speed(1.0));
+                    ui.end_row();
+                    ui.label("Range high");
+                    ui.add(egui::DragValue::new(&mut map.ramp_hi).speed(1.0));
+                    ui.end_row();
+                    ui.label("Levels (2..32)");
+                    ui.add(egui::Slider::new(&mut map.levels, 2..=32));
+                    ui.end_row();
+                    ui.label("Palette");
+                    egui::ComboBox::from_id_source("pal")
+                        .selected_text(map.palette.label())
+                        .show_ui(ui, |ui| {
+                            for p in Palette::ALL {
+                                ui.selectable_value(&mut map.palette, *p, p.label());
+                            }
+                        });
+                    ui.end_row();
+                });
+                ui.horizontal_wrapped(|ui| {
+                    for i in 0..map.levels.max(2) {
+                        let t = i as f64 / (map.levels.max(2) as f64 - 1.0);
+                        let v = map.ramp_lo + t * (map.ramp_hi - map.ramp_lo);
+                        let (bg, fg) = map.color_for(v, 0);
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(30.0, 22.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
+                        ui.painter().text(rect.center(), Align2::CENTER_CENTER, format!("{v:.0}"), FontId::monospace(10.0), Color32::from_rgb(fg[0], fg[1], fg[2]));
+                    }
+                });
+            }
+        }
+        if let Some(i) = del {
+            if i < self.edit_color.rules.len() {
+                self.edit_color.rules.remove(i);
+            }
         }
         ui.separator();
-        if ui.button("Apply to active group").clicked() {
-            if let Some(slot) = self.project.groups.get_mut(self.active_group) { slot.color = map.clone(); pending.push(Cmd::UpdateGroup(slot.clone())); }
-            self.modal = Modal::None;
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Apply to active group").clicked() {
+                let map = self.edit_color.clone();
+                if let Some(slot) = self.project.groups.get_mut(self.active_group) {
+                    slot.color = map.clone();
+                    pending.push(Cmd::UpdateGroup(slot.clone()));
+                }
+                self.status = "colours applied".into();
+                self.modal = Modal::None;
+            }
+            if ui.button("Close").clicked() {
+                self.modal = Modal::None;
+            }
+        });
     }
 
     fn body_scaling(&mut self, ui: &mut egui::Ui, pending: &mut Vec<Cmd>) {
-        let Some(mut g) = self.project.groups.get(self.active_group).cloned() else { return };
-        ui.checkbox(&mut g.scale.enabled, "Enable scaling");
-        egui::Grid::new("sc").show(ui, |ui| {
-            ui.label("X1"); ui.add(egui::DragValue::new(&mut g.scale.x1)); ui.end_row();
-            ui.label("Y1"); ui.add(egui::DragValue::new(&mut g.scale.y1)); ui.end_row();
-            ui.label("X2"); ui.add(egui::DragValue::new(&mut g.scale.x2)); ui.end_row();
-            ui.label("Y2"); ui.add(egui::DragValue::new(&mut g.scale.y2)); ui.end_row();
-            ui.label("Decimals"); ui.add(egui::DragValue::new(&mut g.scale.decimals).range(0..=6)); ui.end_row();
-        });
-        ui.label("Y = m·(X − X1) + Y1");
-        if ui.button("Apply").clicked() {
-            if let Some(slot) = self.project.groups.get_mut(self.active_group) { slot.scale = g.scale; pending.push(Cmd::UpdateGroup(slot.clone())); }
-            self.modal = Modal::None;
+        {
+            let s = &mut self.edit_scale;
+            ui.checkbox(&mut s.enabled, "Enable scaling");
+            egui::Grid::new("sc").show(ui, |ui| {
+                ui.label("X1"); ui.add(egui::DragValue::new(&mut s.x1)); ui.end_row();
+                ui.label("Y1"); ui.add(egui::DragValue::new(&mut s.y1)); ui.end_row();
+                ui.label("X2"); ui.add(egui::DragValue::new(&mut s.x2)); ui.end_row();
+                ui.label("Y2"); ui.add(egui::DragValue::new(&mut s.y2)); ui.end_row();
+                ui.label("Decimals"); ui.add(egui::DragValue::new(&mut s.decimals).range(0..=6)); ui.end_row();
+            });
+            ui.label("Y = m·(X − X1) + Y1");
         }
+        ui.horizontal(|ui| {
+            if ui.button("Apply").clicked() {
+                let sc = self.edit_scale;
+                if let Some(slot) = self.project.groups.get_mut(self.active_group) {
+                    slot.scale = sc;
+                    pending.push(Cmd::UpdateGroup(slot.clone()));
+                }
+                self.modal = Modal::None;
+            }
+            if ui.button("Close").clicked() {
+                self.modal = Modal::None;
+            }
+        });
     }
 
     fn body_names(&mut self, ui: &mut egui::Ui) {
