@@ -619,3 +619,89 @@ mod tests {
         assert_eq!(unpack_bits(&p, v.len()), v);
     }
 }
+
+/// Extended operations for the remaining dialogs (08, 0B, 11, 43/14, raw).
+impl Transport {
+    /// Send an arbitrary PDU and return the raw response PDU.
+    pub fn raw(&mut self, pdu: &[u8]) -> Result<Vec<u8>> {
+        self.transact(pdu)
+    }
+
+    /// FC 08 Diagnostics. `sub` is the sub-function (0x0000 return query data,
+    /// 0x0001 restart comm, 0x0004 force listen-only, 0x000A clear counters,
+    /// 0x000B..0x0012 read counters). Returns the echoed counter/data word.
+    pub fn diagnostics(&mut self, sub: u16, data: u16) -> Result<u16> {
+        let r = self.transact(&[FC_DIAGNOSTICS, hi(sub), lo(sub), hi(data), lo(data)])?;
+        if r.len() >= 5 {
+            Ok(u16::from_be_bytes([r[3], r[4]]))
+        } else {
+            bail!("short diagnostics response")
+        }
+    }
+
+    /// FC 11 (0x0B) Get Comm Event Counter. Returns (status, event_count).
+    pub fn get_comm_event_counter(&mut self) -> Result<(u16, u16)> {
+        let r = self.transact(&[FC_GET_COMM_EVENT_COUNTER])?;
+        if r.len() >= 5 {
+            Ok((
+                u16::from_be_bytes([r[1], r[2]]),
+                u16::from_be_bytes([r[3], r[4]]),
+            ))
+        } else {
+            bail!("short comm event counter response")
+        }
+    }
+
+    /// FC 43/14 (0x2B/0x0E) Read Device Identification. Returns (objects, more_follows).
+    pub fn device_identification(&mut self, read_code: u8, object_id: u8) -> Result<(Vec<(u8, String)>, bool)> {
+        let r = self.transact(&[FC_READ_DEVICE_ID, 0x0E, read_code, object_id])?;
+        Ok(parse_device_id(&r))
+    }
+}
+
+/// Parse a 0x2B/0x0E response PDU into (object_id -> text) pairs and the
+/// "more follows" flag.
+pub fn parse_device_id(r: &[u8]) -> (Vec<(u8, String)>, bool) {
+    let mut out = Vec::new();
+    if r.len() < 6 {
+        return (out, false);
+    }
+    let more = r[4] == 0xFF;
+    let n = r[6] as usize;
+    let mut p = 7;
+    for _ in 0..n {
+        if p + 2 > r.len() {
+            break;
+        }
+        let id = r[p];
+        let len = r[p + 1] as usize;
+        p += 2;
+        if p + len > r.len() {
+            break;
+        }
+        let s = String::from_utf8_lossy(&r[p..p + len]).to_string();
+        p += len;
+        out.push((id, s));
+    }
+    (out, more)
+}
+
+pub fn diag_sub_name(sub: u16) -> &'static str {
+    match sub {
+        0x0000 => "Return Query Data",
+        0x0001 => "Restart Communications Option",
+        0x0002 => "Return Diagnostic Register",
+        0x0003 => "Change ASCII Input Delimiter",
+        0x0004 => "Force Listen Only Mode",
+        0x000A => "Clear Counters and Diagnostic Register",
+        0x000B => "Return Bus Message Count",
+        0x000C => "Return Bus Communication Error Count",
+        0x000D => "Return Bus Exception Error Count",
+        0x000E => "Return Server Message Count",
+        0x000F => "Return Server No Response Count",
+        0x0010 => "Return Server NAK Count",
+        0x0011 => "Return Server Busy Count",
+        0x0012 => "Return Bus Character Overrun Count",
+        _ => "Unknown sub-function",
+    }
+}

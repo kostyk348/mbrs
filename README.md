@@ -59,10 +59,28 @@ src/colors.rs   rules + 32-level/smooth ramps + palettes
 src/scada.rs    tile model + auto-layout
 src/store.rs    shared snapshot + polling worker thread
 src/workspace.rs project (JSON) persistence
-src/app.rs      egui UI: grid, colour editor, SCADA canvas, chart, traffic
+src/app.rs      egui UI: menus, grid, colour editor, SCADA canvas, chart, traffic,
+                scan, test center, full dialog set + shortcuts
+src/names.rs    value names + binary (bit) names
+src/logging.rs  text/CSV logging with Stop/Restart/Continue policies
+docs/UI-RE.md   reverse-engineered Modbus Poll interface map
+docs/COLOR-ENGINE-RE.md  instruction-level reverse of the colour engine
+docs/COMPARISON.md       Modbus Poll vs mbrs
 ```
 
 ## Status
-Work in progress. Core codec, formats, colour engine, store and UI are in place;
-next: connection dialogs polish, Test Center, Excel/CSV logging scheduler,
-TCP-Security (TLS) transport, address/slave scan.
+Feature parity pass done against the reversed interface (`docs/UI-RE.md`):
+
+- menu bar mirrors the original (File/Connection/Functions/Setup/Display/View/Help);
+- shortcuts match: F3/F4/F5/F8/F11/F12, Alt+F5..F8, Alt+A/R/L/O,
+  Alt+Shift+S/U/H/A/B/N/C/F, Ctrl+Shift+S/V, Ctrl+N/O/S;
+- dialogs: Connection Setup, Read/Write Definition, Cell Colors, Scaling,
+  Value Names, Binary Names, Log Setup, Excel Log, Series Settings,
+  Error Counters, Advanced, Modbus/TCP Security, About;
+- function dialogs: 05/06/15/16 writes, 22 Mask Write, 23 Read/Write Multiple,
+  08 Diagnostics, 0B Comm Event Counter, 11 Report Server ID, 43/14 Device ID;
+- Address Scan, Slave Scan, Test Center (arbitrary PDU), traffic log;
+- workspace JSON persists groups/tiles/names/log; SCADA tiles + 32-level colour.
+
+Known gaps: Modbus/TCP Security TLS backend (seam only), Excel-com/OLE,
+print/print-preview, candlestick chart series.

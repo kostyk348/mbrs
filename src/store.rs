@@ -121,6 +121,16 @@ pub enum ConnState {
     Error(String),
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ScanState {
+    pub running: bool,
+    pub kind: u8, // 0 = address scan, 1 = slave scan
+    pub cur: u16,
+    pub end: u16,
+    pub found: Vec<(u16, String)>,
+    pub errors: u32,
+}
+
 pub struct Shared {
     pub words: HashMap<CellKey, u16>,
     pub bits: HashMap<CellKey, bool>,
@@ -128,6 +138,12 @@ pub struct Shared {
     pub stats: Stats,
     pub traffic: VecDeque<TrafficEntry>,
     pub conn: ConnState,
+    pub scan: ScanState,
+    pub last_response: String,
+    pub comm_event: Option<(u16, u16)>,
+    pub device_id: Vec<(u8, String)>,
+    pub server_id: Vec<u8>,
+    pub diag: Option<(u16, u16)>,
 }
 
 impl Default for Shared {
@@ -139,6 +155,12 @@ impl Default for Shared {
             stats: Stats::default(),
             traffic: VecDeque::with_capacity(512),
             conn: ConnState::Disconnected,
+            scan: ScanState::default(),
+            last_response: String::new(),
+            comm_event: None,
+            device_id: Vec::new(),
+            server_id: Vec::new(),
+            diag: None,
         }
     }
 }
@@ -163,6 +185,16 @@ pub enum Cmd {
     WriteReg { unit: u8, addr: u16, value: u16 },
     WriteRegs { unit: u8, addr: u16, values: Vec<u16> },
     WriteCoil { unit: u8, addr: u16, on: bool },
+    WriteCoils { unit: u8, addr: u16, values: Vec<bool> },
+    MaskWrite { unit: u8, addr: u16, and_mask: u16, or_mask: u16 },
+    ReadWriteMulti { unit: u8, read_addr: u16, read_qty: u16, write_addr: u16, values: Vec<u16> },
+    Raw { unit: u8, pdu: Vec<u8> },
+    Diagnostics { unit: u8, sub: u16, data: u16 },
+    CommEvent { unit: u8 },
+    ReportId { unit: u8 },
+    DeviceId { unit: u8, code: u8, obj: u8 },
+    ScanAddress { unit: u8, fc: u8, start: u16, end: u16 },
+    ScanSlave { fc: u8, addr: u16, start: u8, end: u8 },
     SetUnit(u8),
     Stop,
 }
@@ -264,6 +296,128 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                             Err(e) => push_traffic(&shared, '!', format!("WRITE coil {addr} failed: {e}")),
                         }
                     }
+                }
+                Ok(Cmd::WriteCoils { unit, addr, values }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.write_coils(addr, &values) {
+                            Ok(()) => push_traffic(&shared, '>', format!("WRITE {} coils @ {addr}", values.len())),
+                            Err(e) => push_traffic(&shared, '!', format!("WRITE coils @ {addr} failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::MaskWrite { unit, addr, and_mask, or_mask }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.mask_write_reg(addr, and_mask, or_mask) {
+                            Ok(()) => push_traffic(&shared, '>', format!("MASK WRITE {addr} and={and_mask:04X} or={or_mask:04X}")),
+                            Err(e) => push_traffic(&shared, '!', format!("mask write failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::ReadWriteMulti { unit, read_addr, read_qty, write_addr, values }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.read_write_regs(read_addr, read_qty, write_addr, &values) {
+                            Ok(v) => {
+                                for (i, val) in v.iter().enumerate() {
+                                    if let Ok(mut s) = shared.lock() {
+                                        s.words.insert(CellKey::new(unit, FC_READ_HOLDING, read_addr.wrapping_add(i as u16)), *val);
+                                    }
+                                }
+                                push_traffic(&shared, '<', format!("RW read {} regs", v.len()));
+                            }
+                            Err(e) => push_traffic(&shared, '!', format!("read/write failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::Raw { unit, pdu }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        push_traffic(&shared, '>', format!("TX {}", hexs(&pdu)));
+                        match t.raw(&pdu) {
+                            Ok(r) => {
+                                let h = hexs(&r);
+                                push_traffic(&shared, '<', format!("RX {h}"));
+                                if let Ok(mut s) = shared.lock() {
+                                    s.last_response = h;
+                                }
+                            }
+                            Err(e) => {
+                                push_traffic(&shared, '!', format!("raw failed: {e}"));
+                                if let Ok(mut s) = shared.lock() {
+                                    s.last_response = format!("error: {e}");
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(Cmd::Diagnostics { unit, sub, data }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.diagnostics(sub, data) {
+                            Ok(v) => {
+                                push_traffic(&shared, '<', format!("DIAG {sub:#06X} = {v}"));
+                                if let Ok(mut s) = shared.lock() { s.diag = Some((sub, v)); }
+                            }
+                            Err(e) => push_traffic(&shared, '!', format!("diag failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::CommEvent { unit }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.get_comm_event_counter() {
+                            Ok(v) => { if let Ok(mut s) = shared.lock() { s.comm_event = Some(v); } }
+                            Err(e) => push_traffic(&shared, '!', format!("0B failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::ReportId { unit }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.report_server_id() {
+                            Ok(v) => { if let Ok(mut s) = shared.lock() { s.server_id = v; } }
+                            Err(e) => push_traffic(&shared, '!', format!("11 failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::DeviceId { unit, code, obj }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Some(t) = transport.as_mut() {
+                        t.cfg.unit = unit;
+                        match t.device_identification(code, obj) {
+                            Ok((objs, _more)) => { if let Ok(mut s) = shared.lock() { s.device_id = objs; } }
+                            Err(e) => push_traffic(&shared, '!', format!("2B/0E failed: {e}")),
+                        }
+                    }
+                }
+                Ok(Cmd::ScanAddress { unit, fc, start, end }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Ok(mut s) = shared.lock() {
+                        s.scan = ScanState { running: true, kind: 0, cur: start, end, found: Vec::new(), errors: 0 };
+                    }
+                    if let Some(t) = transport.as_mut() {
+                        do_scan_address(t, &shared, unit, fc, start, end);
+                    }
+                    if let Ok(mut s) = shared.lock() { s.scan.running = false; }
+                }
+                Ok(Cmd::ScanSlave { fc, addr, start, end }) => {
+                    ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
+                    if let Ok(mut s) = shared.lock() {
+                        s.scan = ScanState { running: true, kind: 1, cur: start as u16, end: end as u16, found: Vec::new(), errors: 0 };
+                    }
+                    if let Some(t) = transport.as_mut() {
+                        do_scan_slave(t, &shared, fc, addr, start, end);
+                    }
+                    if let Ok(mut s) = shared.lock() { s.scan.running = false; }
                 }
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => return,
@@ -413,4 +567,50 @@ pub fn mode_default_unit(_m: Mode) -> u8 {
 /// True when the cell's function code addresses bits (coils / discrete inputs).
 pub fn is_bit_fc_key(k: CellKey) -> bool {
     is_bit_fc(k.fc)
+}
+
+fn do_scan_address(t: &mut Transport, shared: &SharedHandle, unit: u8, fc: u8, start: u16, end: u16) {
+    t.cfg.unit = unit;
+    let mut a = start;
+    loop {
+        if let Ok(mut s) = shared.lock() {
+            s.scan.cur = a;
+        }
+        let res = if is_bit_fc(fc) {
+            t.read_bits(fc, a, 1).map(|b| if b[0] { "ON".to_string() } else { "off".to_string() })
+        } else {
+            t.read_regs(fc, a, 1).map(|v| v[0].to_string())
+        };
+        if let Ok(mut s) = shared.lock() {
+            match res {
+                Ok(v) => s.scan.found.push((a, v)),
+                Err(_) => s.scan.errors += 1,
+            }
+        }
+        if a == end || a == u16::MAX {
+            break;
+        }
+        a = a.wrapping_add(1);
+    }
+}
+
+fn do_scan_slave(t: &mut Transport, shared: &SharedHandle, fc: u8, addr: u16, start: u8, end: u8) {
+    for u in start..=end {
+        t.cfg.unit = u;
+        if let Ok(mut s) = shared.lock() {
+            s.scan.cur = u as u16;
+        }
+        let ok = if is_bit_fc(fc) {
+            t.read_bits(fc, addr, 1).is_ok()
+        } else {
+            t.read_regs(fc, addr, 1).is_ok()
+        };
+        if let Ok(mut s) = shared.lock() {
+            if ok {
+                s.scan.found.push((u as u16, format!("slave {u}")));
+            } else {
+                s.scan.errors += 1;
+            }
+        }
+    }
 }
