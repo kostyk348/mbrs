@@ -72,7 +72,7 @@ impl Default for ConnConfig {
             mode: Mode::Tcp,
             host: "127.0.0.1".into(),
             port: 502,
-            serial_port: "/dev/ttyUSB0".into(),
+            serial_port: if cfg!(windows) { "COM3".into() } else { "/dev/ttyUSB0".into() },
             baud: 9600,
             data_bits: 8,
             parity: 'N',
