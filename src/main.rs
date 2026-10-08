@@ -23,9 +23,16 @@ fn main() -> eframe::Result<()> {
             .with_title("mbrs — Modbus Studio"),
         ..Default::default()
     };
+    let initial = std::env::args().nth(1);
     eframe::run_native(
         "mbrs — Modbus Studio",
         native_options,
-        Box::new(|cc| Ok(Box::new(app::MbApp::new(cc)))),
+        Box::new(move |cc| {
+            let mut a = app::MbApp::new(cc);
+            if let Some(p) = initial {
+                a.load_workspace_file(&p);
+            }
+            Ok(Box::new(a))
+        }),
     )
 }

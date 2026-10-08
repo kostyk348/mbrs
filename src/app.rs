@@ -127,6 +127,20 @@ impl MbApp {
     fn active(&self) -> Option<&PollGroup> {
         self.project.groups.get(self.active_group)
     }
+
+    /// Load a workspace file (CLI argument `mbrs <workspace.mbw>`).
+    pub fn load_workspace_file(&mut self, path: &str) {
+        match Project::load(path) {
+            Ok(p) => {
+                self.project = p;
+                self.path_buf = path.to_string();
+                self.active_group = 0;
+                self.restart_worker();
+                self.status = format!("loaded {path}");
+            }
+            Err(e) => self.status = format!("load failed: {e}"),
+        }
+    }
 }
 
 impl eframe::App for MbApp {
