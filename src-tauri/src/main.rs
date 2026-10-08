@@ -25,6 +25,7 @@ fn key_str(k: &CellKey) -> String {
 
 fn restart(state: &AppState) {
     if let Some(tx) = state.cmd.lock().unwrap().take() {
+        let _ = tx.send(Cmd::CancelScan);
         let _ = tx.send(Cmd::Stop);
     }
     if let Some(h) = state.worker.lock().unwrap().take() {
@@ -195,6 +196,11 @@ fn scan_slave(state: State<AppState>, fc: u8, addr: u16, start: u8, end: u8) {
     send(&state, Cmd::ScanSlave { fc, addr, start, end });
 }
 
+#[tauri::command]
+fn cancel_scan(state: State<AppState>) {
+    send(&state, Cmd::CancelScan);
+}
+
 // ---- workspace -------------------------------------------------------------
 
 #[tauri::command]
@@ -223,19 +229,23 @@ fn load_workspace(state: State<AppState>, path: String) -> Result<Value, String>
 // ---- native file dialogs ---------------------------------------------------
 
 #[tauri::command]
-fn pick_file(app: tauri::AppHandle) -> Option<String> {
+async fn pick_file(app: tauri::AppHandle) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
-    app.dialog().file().blocking_pick_file().map(|p| p.to_string())
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog().file().pick_file(move |p| {
+        let _ = tx.send(p);
+    });
+    rx.recv().ok().flatten().map(|p| p.to_string())
 }
 
 #[tauri::command]
-fn pick_save(app: tauri::AppHandle, name: String) -> Option<String> {
+async fn pick_save(app: tauri::AppHandle, name: String) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
-    app.dialog()
-        .file()
-        .set_file_name(name)
-        .blocking_save_file()
-        .map(|p| p.to_string())
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog().file().set_file_name(name).save_file(move |p| {
+        let _ = tx.send(p);
+    });
+    rx.recv().ok().flatten().map(|p| p.to_string())
 }
 
 fn main() {
@@ -261,6 +271,7 @@ fn main() {
             raw,
             scan_address,
             scan_slave,
+            cancel_scan,
             save_workspace,
             load_workspace,
             pick_file,

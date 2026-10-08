@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -144,6 +145,7 @@ pub struct Shared {
     pub device_id: Vec<(u8, String)>,
     pub server_id: Vec<u8>,
     pub diag: Option<(u16, u16)>,
+    pub scan_cancel: Arc<AtomicBool>,
 }
 
 impl Default for Shared {
@@ -161,6 +163,7 @@ impl Default for Shared {
             device_id: Vec::new(),
             server_id: Vec::new(),
             diag: None,
+            scan_cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -195,6 +198,7 @@ pub enum Cmd {
     DeviceId { unit: u8, code: u8, obj: u8 },
     ScanAddress { unit: u8, fc: u8, start: u16, end: u16 },
     ScanSlave { fc: u8, addr: u16, start: u8, end: u8 },
+    CancelScan,
     SetUnit(u8),
     Stop,
 }
@@ -401,23 +405,38 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                 }
                 Ok(Cmd::ScanAddress { unit, fc, start, end }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
-                    if let Ok(mut s) = shared.lock() {
+                    let cancel = {
+                        let mut s = shared.lock().unwrap();
                         s.scan = ScanState { running: true, kind: 0, cur: start, end, found: Vec::new(), errors: 0 };
-                    }
+                        s.scan_cancel.store(false, Ordering::SeqCst);
+                        s.scan_cancel.clone()
+                    };
                     if let Some(t) = transport.as_mut() {
-                        do_scan_address(t, &shared, unit, fc, start, end);
+                        let old = t.cfg.timeout_ms;
+                        t.cfg.timeout_ms = old.min(250);
+                        do_scan_address(t, &shared, &cancel, unit, fc, start, end);
+                        t.cfg.timeout_ms = old;
                     }
                     if let Ok(mut s) = shared.lock() { s.scan.running = false; }
                 }
                 Ok(Cmd::ScanSlave { fc, addr, start, end }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
-                    if let Ok(mut s) = shared.lock() {
+                    let cancel = {
+                        let mut s = shared.lock().unwrap();
                         s.scan = ScanState { running: true, kind: 1, cur: start as u16, end: end as u16, found: Vec::new(), errors: 0 };
-                    }
+                        s.scan_cancel.store(false, Ordering::SeqCst);
+                        s.scan_cancel.clone()
+                    };
                     if let Some(t) = transport.as_mut() {
-                        do_scan_slave(t, &shared, fc, addr, start, end);
+                        let old = t.cfg.timeout_ms;
+                        t.cfg.timeout_ms = old.min(250);
+                        do_scan_slave(t, &shared, &cancel, fc, addr, start, end);
+                        t.cfg.timeout_ms = old;
                     }
                     if let Ok(mut s) = shared.lock() { s.scan.running = false; }
+                }
+                Ok(Cmd::CancelScan) => {
+                    if let Ok(s) = shared.lock() { s.scan_cancel.store(true, Ordering::SeqCst); }
                 }
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => return,
@@ -569,10 +588,21 @@ pub fn is_bit_fc_key(k: CellKey) -> bool {
     is_bit_fc(k.fc)
 }
 
-fn do_scan_address(t: &mut Transport, shared: &SharedHandle, unit: u8, fc: u8, start: u16, end: u16) {
+fn do_scan_address(
+    t: &mut Transport,
+    shared: &SharedHandle,
+    cancel: &Arc<AtomicBool>,
+    unit: u8,
+    fc: u8,
+    start: u16,
+    end: u16,
+) {
     t.cfg.unit = unit;
     let mut a = start;
     loop {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
         if let Ok(mut s) = shared.lock() {
             s.scan.cur = a;
         }
@@ -594,8 +624,19 @@ fn do_scan_address(t: &mut Transport, shared: &SharedHandle, unit: u8, fc: u8, s
     }
 }
 
-fn do_scan_slave(t: &mut Transport, shared: &SharedHandle, fc: u8, addr: u16, start: u8, end: u8) {
+fn do_scan_slave(
+    t: &mut Transport,
+    shared: &SharedHandle,
+    cancel: &Arc<AtomicBool>,
+    fc: u8,
+    addr: u16,
+    start: u8,
+    end: u8,
+) {
     for u in start..=end {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
         t.cfg.unit = u;
         if let Ok(mut s) = shared.lock() {
             s.scan.cur = u as u16;

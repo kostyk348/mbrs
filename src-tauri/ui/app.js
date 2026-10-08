@@ -55,6 +55,7 @@ function match(op, rv, v, raw) {
   }
 }
 function colorFor(cm, v, raw) {
+  if (!cm) return [[30,32,38], [220,220,220]];
   if (cm.mode === "Discrete" || cm.mode === "Smooth") {
     const span = cm.ramp_hi - cm.ramp_lo;
     let t = Math.abs(span) < 1e-9 ? 0 : (v - cm.ramp_lo) / span;
@@ -388,7 +389,11 @@ window.dlgConn = () => {
 };
 
 window.dlgGroup = (isNew) => {
-  const g = isNew ? { id: 0, unit: 1, fc: 3, start: 0, count: 10, scan_ms: 1000, enabled: true, format: "U16", color: null, scale: null, name: "Group", chart: true } : group();
+  const g = isNew
+    ? { id: 0, unit: 1, fc: 3, start: 0, count: 10, scan_ms: 1000, enabled: true, format: "U16",
+        color: { mode: "Rules", normal_bg: [30,32,38], normal_fg: [220,220,220], auto_fg: true, rules: [], ramp_lo: 0, ramp_hi: 100, levels: 32, palette: "Traffic" },
+        scale: { x1: 0, y1: 0, x2: 100, y2: 100, decimals: 2, enabled: false }, name: "Group", chart: true }
+    : group();
   if (!g) return;
   const fmts = ["U16","I16","Hex16","Bin16","Ascii16","U16Swapped"];
   const orders = ["BigEndian","LittleEndian","BigEndianByteSwap","LittleEndianByteSwap"];
@@ -553,6 +558,7 @@ window.dlgScan = (kind) => show("dlg-scan", `
     ${kind === "addr" ? `Unit <input id="s-u" type="number" value="1"/> From <input id="s-a" type="number" value="0"/> To <input id="s-b" type="number" value="19"/> FC <select id="s-fc"><option value="3">03 Holding</option><option value="4">04 Input</option><option value="1">01 Coils</option><option value="2">02 Discrete</option></select>`
       : `From ID <input id="s-a" type="number" value="1"/> To ID <input id="s-b" type="number" value="32"/> Addr <input id="s-u" type="number" value="0"/>`}
     <button id="s-go">Start</button>
+    <button onclick="invoke('cancel_scan')">Cancel</button>
   </div>
   <div class="actions"><button onclick="this.closest('dialog').close()">Close</button></div>`,
   (d) => { d.querySelector("#s-go").onclick = async () => {
@@ -569,6 +575,14 @@ window.dlgAbout = () => show("dlg-about", `
   <div class="actions"><button onclick="this.closest('dialog').close()">Close</button></div>`);
 
 /* ---------- render / poll ---------- */
+function renderStatus() {
+  const s = state.snap; if (!s) return;
+  const st = document.getElementById("status");
+  const col = s.state === "Connected" ? "var(--ok)" : (s.state === "Error" ? "var(--err)" : "var(--muted)");
+  st.innerHTML = `<span class="dot" style="background:${col}"></span>${esc(s.conn.host)}:${s.conn.port}
+    <span>${esc(state.status)}</span>
+    <span class="right">ok ${s.stats.ok}  err ${s.stats.err}  timeouts ${s.stats.timeouts}  ${s.stats.last_ms.toFixed(1)} ms</span>`;
+}
 function render() {
   if (!state.snap) return;
   if (!state.groupId && state.snap.groups.length) state.groupId = state.snap.groups[0].id;
@@ -581,15 +595,20 @@ function render() {
   else if (state.view === "traffic") renderTraffic();
   else if (state.view === "scan") renderScan();
   else if (state.view === "test") renderTest();
-  const st = document.getElementById("status");
-  const col = state.snap.state === "Connected" ? "var(--ok)" : (state.snap.state === "Error" ? "var(--err)" : "var(--muted)");
-  st.innerHTML = `<span class="dot" style="background:${col}"></span>${esc(state.snap.conn.host)}:${state.snap.conn.port}
-    <span>${esc(state.status)}</span>
-    <span class="right">ok ${state.snap.stats.ok}  err ${state.snap.stats.err}  timeouts ${state.snap.stats.timeouts}  ${state.snap.stats.last_ms.toFixed(1)} ms</span>`;
+  renderStatus();
 }
-
+/* Do not rebuild the DOM while a dialog is open or an input is focused,
+   otherwise the rebuild eats clicks and wipes in-progress typing. */
+function busy() {
+  if (document.querySelector("dialog[open]")) return true;
+  const ae = document.activeElement;
+  if (ae && ["INPUT", "SELECT", "TEXTAREA"].includes(ae.tagName)) return true;
+  return false;
+}
 async function poll() {
-  try { state.snap = await invoke("snapshot"); render(); } catch (e) { /* window closing */ }
+  try { state.snap = await invoke("snapshot"); } catch (e) { return; }
+  try { busy() ? renderStatus() : render(); }
+  catch (e) { state.status = "UI error: " + e.message; renderStatus(); }
 }
 buildMenus();
 setInterval(poll, 150);
