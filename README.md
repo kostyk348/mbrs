@@ -46,6 +46,10 @@ drive them — so a human never has to read raw register tables.
 ```sh
 cargo run --release
 ```
+Linux needs GTK3 development headers for the **native file dialog** (`rfd`, `gtk3` feature links GTK):
+```sh
+sudo apt install libgtk-3-dev     # Arch/Artix: pacman -S gtk3
+```
 Test suite:
 ```sh
 cargo test

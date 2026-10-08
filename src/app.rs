@@ -141,7 +141,7 @@ pub struct MbApp {
 
 impl MbApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        setup_style(&cc.egui_ctx);
         let shared: SharedHandle = Arc::new(Mutex::new(Shared::default()));
         let project = Project::default();
         let (cmd, worker) = crate::store::spawn(project.conn.clone(), shared.clone());
@@ -339,21 +339,28 @@ impl eframe::App for MbApp {
                         ui.close_menu();
                     }
                     ui.separator();
-                    ui.label("workspace path:");
-                    ui.text_edit_singleline(&mut self.path_buf);
-                    if ui.button("Open…\tCtrl+O").clicked() {
-                        self.project_open();
+                    ui.label(format!("workspace: {}", self.path_buf));
+                    if ui.button("Open workspace…\tCtrl+O").clicked() {
+                        if let Some(p) = pick_open("mbrs workspace (*.mbw)", "mbw") {
+                            self.path_buf = p;
+                            self.project_open();
+                        }
                         ui.close_menu();
                     }
-                    if ui.button("Save\tCtrl+S").clicked() {
-                        self.project_save();
+                    if ui.button("Save workspace…\tCtrl+S").clicked() {
+                        if let Some(p) = pick_save("mbrs workspace (*.mbw)", "mbw", "workspace.mbw") {
+                            self.path_buf = p;
+                            self.project_save();
+                        }
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.button("Export to CSV…").clicked() {
-                        match self.export_csv() {
-                            Ok(p) => self.status = format!("csv -> {p}"),
-                            Err(e) => self.status = format!("csv failed: {e}"),
+                        if let Some(p) = pick_save("CSV (*.csv)", "csv", "mbrs-export.csv") {
+                            match self.export_csv_to(&p) {
+                                Ok(p) => self.status = format!("csv -> {p}"),
+                                Err(e) => self.status = format!("csv failed: {e}"),
+                            }
                         }
                         ui.close_menu();
                     }
@@ -475,6 +482,44 @@ impl eframe::App for MbApp {
             });
         });
 
+        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.strong("mbrs");
+                ui.separator();
+                for (lbl, v) in [
+                    ("Grid", View::Grid),
+                    ("SCADA", View::Scada),
+                    ("Chart", View::Chart),
+                    ("Traffic", View::Traffic),
+                    ("Scan", View::Scan),
+                    ("Test", View::Test),
+                ] {
+                    if ui.selectable_label(self.view == v, lbl).clicked() {
+                        self.view = v;
+                    }
+                }
+                ui.separator();
+                if ui.button("Connect").clicked() {
+                    self.restart_worker();
+                }
+                if ui.button("Definition").clicked() {
+                    if let Some(g) = self.active() {
+                        self.g_edit = g.clone();
+                    }
+                    self.modal = Modal::GroupDef;
+                }
+                if ui.button("Colors").clicked() {
+                    self.modal = Modal::Colors;
+                }
+                if ui.button("Scaling").clicked() {
+                    self.modal = Modal::Scaling;
+                }
+                if ui.button("Log").clicked() {
+                    self.toggle_log(!self.log.enabled);
+                }
+            });
+        });
+
         egui::SidePanel::left("side").resizable(true).default_width(330.0).show(ctx, |ui| {
             ui.heading("mbrs · Modbus Studio");
             ui.label(format!("{}  {}:{}", self.project.conn.mode.label(), self.project.conn.host, self.project.conn.port));
@@ -525,6 +570,27 @@ impl eframe::App for MbApp {
             }
             ui.separator();
             ui.label(format!("Status: {}", self.status));
+        });
+
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                let col = match &snap.conn {
+                    ConnState::Connected => Color32::from_rgb(80, 220, 120),
+                    ConnState::Connecting => Color32::from_rgb(230, 200, 60),
+                    ConnState::Error(_) => Color32::from_rgb(230, 90, 90),
+                    ConnState::Disconnected => Color32::from_rgb(170, 170, 170),
+                };
+                ui.colored_label(col, "●");
+                ui.label(format!("{}:{}", self.project.conn.host, self.project.conn.port));
+                ui.separator();
+                ui.label(&self.status);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(format!(
+                        "ok {}   err {}   timeouts {}   {:.1} ms",
+                        snap.stats.ok, snap.stats.err, snap.stats.timeouts, snap.stats.last_ms
+                    ));
+                });
+            });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| match self.view {
@@ -642,9 +708,26 @@ impl MbApp {
         let n = g.format.regs_needed();
         let row_h = 22.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::Frame::none()
+                .fill(Color32::from_rgb(33, 36, 43))
+                .inner_margin(egui::Margin::symmetric(6.0, 3.0))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.strong("addr");
+                        ui.add_space(48.0);
+                        ui.strong("raw");
+                        ui.add_space(96.0);
+                        ui.strong("value");
+                    });
+                });
             for i in 0..g.count {
                 let addr = g.start.wrapping_add(i);
                 let key = CellKey::new(g.unit, g.fc, addr);
+                let stripe = if i % 2 == 0 { Color32::from_rgb(25, 27, 33) } else { Color32::from_rgb(21, 23, 28) };
+                egui::Frame::none()
+                    .fill(stripe)
+                    .inner_margin(egui::Margin::symmetric(6.0, 1.0))
+                    .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let disp = if self.plc_addr { 1 + addr as u32 } else { addr as u32 };
                     ui.monospace(format!("{disp:6}"));
@@ -697,6 +780,7 @@ impl MbApp {
                         }
                     }
                 });
+                    });
             }
         });
     }
@@ -833,7 +917,7 @@ impl MbApp {
         self.shared.lock().unwrap().traffic.iter().cloned().collect()
     }
 
-    fn export_csv(&self) -> anyhow::Result<String> {
+    fn export_csv_to(&self, path: &str) -> anyhow::Result<String> {
         let s = self.shared.lock().unwrap();
         let mut out = String::from("unit,fc,addr,value\n");
         let mut keys: Vec<&CellKey> = s.words.keys().collect();
@@ -841,9 +925,12 @@ impl MbApp {
         for k in keys {
             out.push_str(&format!("{},{},0x{:04X},{}\n", k.unit, k.fc, k.addr, s.words[k]));
         }
-        let path = format!("{}.csv", self.path_buf.trim_end_matches(".mbw"));
-        std::fs::write(&path, out)?;
-        Ok(path)
+        std::fs::write(path, out)?;
+        Ok(path.to_string())
+    }
+
+    fn export_csv(&self) -> anyhow::Result<String> {
+        self.export_csv_to(&format!("{}.csv", self.path_buf.trim_end_matches(".mbw")))
     }
 }
 
@@ -1118,12 +1205,19 @@ impl MbApp {
             }
         });
         ui.horizontal(|ui| {
-            ui.label("file"); ui.text_edit_singleline(&mut self.names_path);
-            if ui.button("Import").clicked() {
-                if let Ok(s) = std::fs::read_to_string(&self.names_path) { self.names.import_txt(&s); }
+            if ui.button("Import…").clicked() {
+                if let Some(p) = pick_open("names (*.txt)", "txt") {
+                    if let Ok(s) = std::fs::read_to_string(&p) {
+                        self.names.import_txt(&s);
+                        self.status = format!("imported {p}");
+                    }
+                }
             }
-            if ui.button("Export").clicked() {
-                let _ = std::fs::write(&self.names_path, self.names.export_txt());
+            if ui.button("Export…").clicked() {
+                if let Some(p) = pick_save("names (*.txt)", "txt", "names.txt") {
+                    let _ = std::fs::write(&p, self.names.export_txt());
+                    self.status = format!("exported {p}");
+                }
             }
         });
         ui.separator();
@@ -1149,7 +1243,15 @@ impl MbApp {
     }
 
     fn body_log(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| { ui.label("File"); ui.text_edit_singleline(&mut self.log.path); });
+        ui.horizontal(|ui| {
+            ui.label("File");
+            ui.text_edit_singleline(&mut self.log.path);
+            if ui.button("Browse…").clicked() {
+                if let Some(p) = pick_save("log (*.csv / *.txt)", "csv", "mbrs-log.csv") {
+                    self.log.path = p;
+                }
+            }
+        });
         ui.horizontal(|ui| { ui.label("Format"); for f in [LogFormat::Text, LogFormat::Csv] { ui.selectable_value(&mut self.log.format, f, f.label()); } });
         ui.horizontal(|ui| { ui.label("Policy"); for p in LogPolicy::ALL { ui.selectable_value(&mut self.log.policy, *p, p.label()); } });
         ui.horizontal(|ui| { ui.label("Interval ms"); ui.add(egui::DragValue::new(&mut self.log.interval_ms).speed(10.0).range(10..=3_600_000)); ui.checkbox(&mut self.log.append, "Append"); });
@@ -1291,6 +1393,62 @@ impl MbApp {
 }
 
 // --------------------------- free helpers ----------------------------------
+
+/// Dark, accent-themed visuals so the app looks like a real instrument panel.
+fn setup_style(ctx: &egui::Context) {
+    use egui::{FontId, TextStyle};
+    let mut style = (*ctx.style()).clone();
+    let accent = Color32::from_rgb(86, 156, 214);
+    let mut v = egui::Visuals::dark();
+    v.panel_fill = Color32::from_rgb(21, 23, 28);
+    v.window_fill = Color32::from_rgb(28, 31, 37);
+    v.extreme_bg_color = Color32::from_rgb(15, 17, 21);
+    v.faint_bg_color = Color32::from_rgb(33, 36, 43);
+    v.selection.bg_fill = accent;
+    v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+    v.window_rounding = egui::Rounding::same(8.0);
+    v.menu_rounding = egui::Rounding::same(8.0);
+    v.widgets.noninteractive.bg_fill = Color32::from_rgb(30, 33, 40);
+    v.widgets.inactive.bg_fill = Color32::from_rgb(45, 49, 58);
+    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(37, 40, 48);
+    v.widgets.inactive.rounding = egui::Rounding::same(6.0);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(60, 66, 78);
+    v.widgets.hovered.rounding = egui::Rounding::same(6.0);
+    v.widgets.active.bg_fill = accent;
+    v.widgets.active.rounding = egui::Rounding::same(6.0);
+    style.visuals = v;
+    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    style.spacing.button_padding = egui::vec2(10.0, 5.0);
+    style.spacing.scroll.bar_width = 10.0;
+    style.text_styles = [
+        (TextStyle::Heading, FontId::proportional(20.0)),
+        (TextStyle::Body, FontId::proportional(14.5)),
+        (TextStyle::Monospace, FontId::monospace(13.0)),
+        (TextStyle::Button, FontId::proportional(14.0)),
+        (TextStyle::Small, FontId::proportional(12.0)),
+    ]
+    .into();
+    ctx.set_style(style);
+}
+
+fn pick_open(desc: &str, ext: &str) -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter(desc, &[ext])
+        .pick_file()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+fn pick_save(desc: &str, ext: &str, default_name: &str) -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter(desc, &[ext])
+        .set_file_name(default_name)
+        .save_file()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+fn pick_dir() -> Option<String> {
+    rfd::FileDialog::new().pick_folder().map(|p| p.to_string_lossy().to_string())
+}
 
 fn draw_cell(ui: &mut egui::Ui, w: f32, h: f32, text: &str, bg: [u8; 3], fg: [u8; 3], selected: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
