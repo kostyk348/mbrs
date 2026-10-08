@@ -5,6 +5,10 @@ edition = "2021"
 description = "mbrs — Modbus Studio. Rust Modbus master (SCADA-style) with N-rule 32-colour cell mapping."
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "mbrs"
+path = "src/lib.rs"
+
 [[bin]]
 name = "mbrs"
 path = "src/main.rs"

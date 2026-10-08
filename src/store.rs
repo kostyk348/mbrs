@@ -95,7 +95,7 @@ impl PollGroup {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Stats {
     pub ok: u64,
     pub err: u64,
@@ -106,14 +106,14 @@ pub struct Stats {
     pub polls: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrafficEntry {
     pub t: String,
     pub dir: char, // '>' tx, '<' rx, '!' error
     pub text: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnState {
     Disconnected,
     Connecting,
@@ -121,7 +121,7 @@ pub enum ConnState {
     Error(String),
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ScanState {
     pub running: bool,
     pub kind: u8, // 0 = address scan, 1 = slave scan

@@ -6,14 +6,6 @@
 #![allow(dead_code)]
 
 mod app;
-mod colors;
-mod formats;
-mod logging;
-mod modbus;
-mod names;
-mod scada;
-mod store;
-mod workspace;
 
 use eframe::egui;
 

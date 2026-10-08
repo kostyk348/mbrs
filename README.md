@@ -88,3 +88,31 @@ Feature parity pass done against the reversed interface (`docs/UI-RE.md`):
 
 Known gaps: Modbus/TCP Security TLS backend (seam only), Excel-com/OLE,
 print/print-preview, candlestick chart series.
+
+## Product front-end — Tauri v2 (`src-tauri/`)
+
+The same core also powers a product-grade desktop app with a **native webview**
+(WebView2 on Windows, WebKitGTK on Linux, WKWebView on macOS) and a static
+HTML/CSS/JS front-end — no npm/build step.
+
+Layout:
+```
+src/lib.rs        UI-agnostic core (all modules below are pub)
+src-tauri/        Tauri back-end crate (path-dep on the core lib)
+  src/main.rs     #[tauri::command] layer: snapshot/set_conn/add_group/...
+  ui/             index.html + style.css + app.js (vanilla, no bundler)
+  capabilities/   core:default + dialog:default
+  tauri.conf.json frontendDist = "ui", withGlobalTauri = true
+```
+
+Run (Linux needs WebKitGTK dev headers: `pacman -S webkit2gtk` / `apt install libwebkit2gtk-4.1-dev`):
+```sh
+cd src-tauri && cargo run
+```
+Windows/macOS need no extra system libs (WebView2 / WKWebView). Commands exposed:
+connection, group CRUD, single/multiple coil+register writes, mask write,
+read/write multiple, diagnostics, comm-event counter, report server id, device
+identification, raw PDU, address/slave scan, workspace save/load, native
+file dialogs (dialog plugin). The register grid, conditional-colour editor
+(N rules + 32-level/smooth ramps), scan, test center and traffic view are in
+`ui/app.js`, client-side, fed by 150 ms `snapshot` polling.

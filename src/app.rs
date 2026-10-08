@@ -2,17 +2,17 @@
 //! chart, communication traffic, address/slave scan, test center, logging and
 //! the full Modbus Poll dialog set, with matching menu bar and shortcuts.
 
-use crate::colors::{contrast, ColorMap, ColorMode, ColorOp, ColorRule, Palette, PALETTE32};
-use crate::formats::{ValueFormat, WordOrder};
-use crate::logging::{LogConfig, LogFormat, LogPolicy, LogWriter};
-use crate::modbus::{
+use mbrs::colors::{contrast, ColorMap, ColorMode, ColorOp, ColorRule, Palette, PALETTE32};
+use mbrs::formats::{ValueFormat, WordOrder};
+use mbrs::logging::{LogConfig, LogFormat, LogPolicy, LogWriter};
+use mbrs::modbus::{
     diag_sub_name, fc_label, is_bit_fc, ConnConfig, Mode, FC_GET_COMM_EVENT_COUNTER, FC_READ_COILS,
     FC_READ_DEVICE_ID, FC_READ_DISCRETE, FC_READ_HOLDING, FC_READ_INPUT, FC_REPORT_SERVER_ID,
 };
-use crate::names::Names;
-use crate::scada::{autolayout, Tile, TileKind};
-use crate::store::{is_bit_fc_key, CellKey, Cmd, ConnState, PollGroup, Scale, Shared, SharedHandle};
-use crate::workspace::Project;
+use mbrs::names::Names;
+use mbrs::scada::{autolayout, Tile, TileKind};
+use mbrs::store::{is_bit_fc_key, CellKey, Cmd, ConnState, PollGroup, Scale, Shared, SharedHandle};
+use mbrs::workspace::Project;
 use eframe::egui;
 use egui::{Align2, Color32, FontId, Key, Modifiers, Stroke};
 use std::collections::{HashMap, VecDeque};
@@ -72,9 +72,9 @@ struct Snap {
     words: HashMap<CellKey, u16>,
     bits: HashMap<CellKey, bool>,
     history: HashMap<CellKey, VecDeque<f64>>,
-    stats: crate::store::Stats,
+    stats: mbrs::store::Stats,
     conn: ConnState,
-    scan: crate::store::ScanState,
+    scan: mbrs::store::ScanState,
     last_response: String,
     comm_event: Option<(u16, u16)>,
     device_id: Vec<(u8, String)>,
@@ -146,7 +146,7 @@ impl MbApp {
         setup_style(&cc.egui_ctx);
         let shared: SharedHandle = Arc::new(Mutex::new(Shared::default()));
         let project = Project::default();
-        let (cmd, worker) = crate::store::spawn(project.conn.clone(), shared.clone());
+        let (cmd, worker) = mbrs::store::spawn(project.conn.clone(), shared.clone());
         for g in &project.groups {
             let _ = cmd.send(Cmd::AddGroup(g.clone()));
         }
@@ -246,7 +246,7 @@ impl MbApp {
         if let Some(h) = self.worker.take() {
             let _ = h.join();
         }
-        let (cmd, worker) = crate::store::spawn(self.project.conn.clone(), self.shared.clone());
+        let (cmd, worker) = mbrs::store::spawn(self.project.conn.clone(), self.shared.clone());
         for g in &self.project.groups {
             let _ = cmd.send(Cmd::AddGroup(g.clone()));
         }
@@ -931,7 +931,7 @@ impl MbApp {
         ui.monospace(if snap.last_response.is_empty() { "(none)".into() } else { snap.last_response.clone() });
     }
 
-    fn traffic(&self) -> Vec<crate::store::TrafficEntry> {
+    fn traffic(&self) -> Vec<mbrs::store::TrafficEntry> {
         self.shared.lock().unwrap().traffic.iter().cloned().collect()
     }
 
@@ -1586,7 +1586,7 @@ fn color_row(ui: &mut egui::Ui, label: &str, c: &mut [u8; 3]) {
     });
 }
 
-fn draw_traffic(ui: &mut egui::Ui, log: &[crate::store::TrafficEntry]) {
+fn draw_traffic(ui: &mut egui::Ui, log: &[mbrs::store::TrafficEntry]) {
     ui.strong("Communication traffic");
     ui.separator();
     egui::ScrollArea::vertical().stick_to_bottom(true).show(ui, |ui| {

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>mbrs — Modbus Studio</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="menubar"></header>
+  <nav id="toolbar"></nav>
+  <main>
+    <aside id="side"></aside>
+    <section id="center">
+      <div id="view-grid" class="view"></div>
+      <div id="view-chart" class="view" hidden><canvas id="chart" width="1200" height="600"></canvas></div>
+      <div id="view-traffic" class="view" hidden><pre id="traffic"></pre></div>
+      <div id="view-scan" class="view" hidden><div id="scan"></div></div>
+      <div id="view-test" class="view" hidden>
+        <h3>Test Center</h3>
+        <div class="row">
+          <label>Unit <input id="t-unit" type="number" value="1" min="0" max="255" /></label>
+          <label>PDU (hex) <input id="t-pdu" size="42" value="03 00 00 00 02" /></label>
+          <button id="t-send">Send</button>
+        </div>
+        <label class="small">Last response</label>
+        <pre id="t-resp"></pre>
+      </div>
+    </section>
+  </main>
+  <footer id="status"></footer>
+
+  <dialog id="dlg-conn" class="dlg"></dialog>
+  <dialog id="dlg-group" class="dlg"></dialog>
+  <dialog id="dlg-colors" class="dlg"></dialog>
+  <dialog id="dlg-names" class="dlg"></dialog>
+  <dialog id="dlg-log" class="dlg"></dialog>
+  <dialog id="dlg-fn" class="dlg"></dialog>
+  <dialog id="dlg-scan" class="dlg"></dialog>
+  <dialog id="dlg-about" class="dlg"></dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
