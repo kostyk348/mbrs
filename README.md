@@ -1,8 +1,9 @@
 # mbrs — Modbus Studio (Rust)
-[![ci](https://github.com/kostyk348/mbrs/actions/workflows/ci.yml/badge.svg)](https://github.com/kostyk348/mbrs/actions/workflows/ci.yml)
+
+[![ci](https://github.com/kostyk348/mbrs/actions/workflows/build.yml/badge.svg)](https://github.com/kostyk348/mbrs/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/kostyk348/mbrs?sort=semver)](https://github.com/kostyk348/mbrs/releases)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
-
+[![Last commit](https://img.shields.io/github/last-commit/kostyk348/mbrs?branch=main)](https://github.com/kostyk348/mbrs/commits/main)
 
 A from-scratch Modbus master / monitor written in Rust, inspired by the feature
 surface of *Modbus Poll* (Witte Software) but with a far stronger value→colour
@@ -22,6 +23,7 @@ Enter writes it to the device (FC 05/06/16), Esc cancels.
 ## Features
 
 ### Protocol (implemented from scratch)
+
 - Framings: **Modbus/TCP** (MBAP), **TCP Security-ready seam**, **RTU** (serial),
   **ASCII** (serial), **RTU/ASCII over TCP**, **UDP**.
 - Function codes: `01 02 03 04 05 06 08 0B 0F 10 11 16 17 22 23 43/14`.
@@ -29,11 +31,13 @@ Enter writes it to the device (FC 05/06/16), Esc cancels.
 - Unit-tested codec (`crc16`, `lrc`, bit packing).
 
 ### Display formats
+
 28 formats: 16-bit signed/unsigned/hex/bin/ASCII/byte-swap, 32- and 64-bit
 signed/unsigned/float/double with all four word/byte orders (AB CD, CD AB,
 BA DC, DC BA), plus **linear scaling** and **value names** (0=Ready, 1=Running…).
 
 ### Colour engine — the differentiator
+
 Modbus Poll offers only `Normal + Rule 1 + Rule 2` (~3 visual states, one colour
 each). `mbrs` offers:
 - **unbounded ordered rules**, first match wins — `eq ne gt ge lt le`,
@@ -45,10 +49,12 @@ each). `mbrs` offers:
 - live preview of the resulting colour band.
 
 ### SCADA dashboard
+
 Bind tiles (Value / Lamp / Bar / Gauge) to registers and let the colour engine
 drive them — so a human never has to read raw register tables.
 
 ### Extras
+
 - **Virtualised register grid**: only the visible rows are built each frame (`src/grid.rs`),
   so a 100 000-register window costs the same as a 30-row one.
 - Strip chart with min/max/last and history buffer.
@@ -65,6 +71,7 @@ and `.tar.gz` for Linux (x86_64-unknown-linux-gnu) and macOS (aarch64-apple-darw
 <https://github.com/kostyk348/mbrs/releases>
 
 ## Build & run
+
 ```sh
 cargo run --release
 ```
@@ -90,6 +97,7 @@ Design notes for the UI work live in `docs/EGUI-PLAN.md` (egui practices, three 
 and the order of work).
 
 ## Layout
+
 ```
 src/modbus.rs   framings, CRC/LRC, transport, client helpers
 src/formats.rs  28 display formats + scaling/parse
@@ -109,6 +117,7 @@ docs/COMPARISON.md       Modbus Poll vs mbrs
 ```
 
 ## Status
+
 Feature parity pass done against the reversed interface (`docs/UI-RE.md`):
 
 - menu bar mirrors the original (File/Connection/Functions/Setup/Display/View/Help);
