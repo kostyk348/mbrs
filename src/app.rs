@@ -8,8 +8,7 @@ use mbrs::colors::{contrast, ColorMap, ColorMode, ColorOp, ColorRule, Palette, P
 use mbrs::formats::{ValueFormat, WordOrder};
 use mbrs::logging::{LogConfig, LogFormat, LogPolicy, LogWriter};
 use mbrs::modbus::{
-    diag_sub_name, fc_label, is_bit_fc, ConnConfig, Mode, FC_GET_COMM_EVENT_COUNTER, FC_READ_COILS,
-    FC_READ_DEVICE_ID, FC_READ_DISCRETE, FC_READ_HOLDING, FC_READ_INPUT, FC_REPORT_SERVER_ID,
+    diag_sub_name, fc_label, Mode, FC_READ_COILS, FC_READ_DISCRETE, FC_READ_HOLDING, FC_READ_INPUT,
 };
 use mbrs::names::Names;
 use mbrs::scada::{autolayout, Tile, TileKind};
@@ -1088,7 +1087,7 @@ impl MbApp {
                         (last.saturating_sub(first)) as f32 * row_pitch,
                     ),
                 );
-                ui.allocate_ui_at_rect(rect, |ui| {
+                ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                     for i in (first as u16)..(last as u16) {
                         let addr = g.start.wrapping_add(i);
                         let key = CellKey::new(g.unit, g.fc, addr);
@@ -1777,7 +1776,7 @@ impl MbApp {
             .default_width(420.0)
             .show(ctx, |ui| {
                 let c = &mut self.project.conn;
-                egui::ComboBox::from_id_source("mode")
+                egui::ComboBox::from_id_salt("mode")
                     .selected_text(c.mode.label())
                     .show_ui(ui, |ui| {
                         for m in [
@@ -1849,7 +1848,7 @@ impl MbApp {
             ui.add(egui::DragValue::new(&mut g.unit).range(0..=255));
             ui.end_row();
             ui.label("Function");
-            egui::ComboBox::from_id_source("gdfc")
+            egui::ComboBox::from_id_salt("gdfc")
                 .selected_text(fc_label(g.fc))
                 .show_ui(ui, |ui| {
                     for fc in [
@@ -1876,7 +1875,7 @@ impl MbApp {
             );
             ui.end_row();
             ui.label("Format");
-            egui::ComboBox::from_id_source("gdfmt")
+            egui::ComboBox::from_id_salt("gdfmt")
                 .selected_text(g.format.label())
                 .show_ui(ui, |ui| {
                     for f in all_formats() {
@@ -1928,7 +1927,7 @@ impl MbApp {
                             ui.horizontal(|ui| {
                                 ui.checkbox(&mut r.enabled, "");
                                 ui.strong(format!("Rule {}", i + 1));
-                                egui::ComboBox::from_id_source(format!("op{i}"))
+                                egui::ComboBox::from_id_salt(format!("op{i}"))
                                     .selected_text(r.op.label())
                                     .show_ui(ui, |ui| {
                                         for op in ColorOp::ALL {
@@ -1976,7 +1975,7 @@ impl MbApp {
                     ui.add(egui::Slider::new(&mut map.levels, 2..=32));
                     ui.end_row();
                     ui.label("Palette");
-                    egui::ComboBox::from_id_source("pal")
+                    egui::ComboBox::from_id_salt("pal")
                         .selected_text(map.palette.label())
                         .show_ui(ui, |ui| {
                             for p in Palette::ALL {
@@ -2123,7 +2122,9 @@ impl MbApp {
                 if ui.text_edit_singleline(&mut s).changed() {
                     self.names.set_bit(b, s);
                 }
-                if b % 1 == 0 {
+                // По два бита в строке: `b % 1` был всегда нулём, из-за чего Grid рисовал
+                // 16 строк по одному полю вместо компактной таблицы.
+                if b % 2 == 1 {
                     ui.end_row();
                 }
             }
@@ -2267,7 +2268,7 @@ impl MbApp {
         if ui.button("Send (FC 16)").clicked() {
             let vals: Vec<u16> = self
                 .w_val
-                .split(|c| c == ',' || c == ' ')
+                .split([',', ' '])
                 .filter_map(|t| t.trim().parse::<u16>().ok())
                 .collect();
             if vals.is_empty() {
@@ -2323,7 +2324,7 @@ impl MbApp {
         if ui.button("Send").clicked() {
             let vals: Vec<u16> = self
                 .w_val
-                .split(|c| c == ',' || c == ' ')
+                .split([',', ' '])
                 .filter_map(|t| t.trim().parse::<u16>().ok())
                 .collect();
             pending.push(Cmd::ReadWriteMulti {
@@ -2342,7 +2343,7 @@ impl MbApp {
             ui.label("Unit");
             ui.add(egui::DragValue::new(&mut self.w_unit).range(0..=255));
         });
-        egui::ComboBox::from_id_source("diagsub")
+        egui::ComboBox::from_id_salt("diagsub")
             .selected_text(diag_sub_name(self.diag_sub))
             .show_ui(ui, |ui| {
                 for sub in [
@@ -2440,7 +2441,7 @@ impl MbApp {
         });
         ui.horizontal(|ui| {
             ui.label("Function");
-            egui::ComboBox::from_id_source("scanfc")
+            egui::ComboBox::from_id_salt("scanfc")
                 .selected_text(fc_label(self.scan_fc))
                 .show_ui(ui, |ui| {
                     for fc in [
@@ -2567,6 +2568,7 @@ fn pick_dir() -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+#[allow(clippy::too_many_arguments)] // клетка: размер, текст, цвета, выделение, id
 fn draw_cell(
     ui: &mut egui::Ui,
     w: f32,
@@ -2727,10 +2729,7 @@ fn draw_scan(ui: &mut egui::Ui, snap: &Snap) {
 }
 
 fn parse_hex(s: &str) -> Option<Vec<u8>> {
-    let toks: Vec<&str> = s
-        .split(|c: char| c == ' ' || c == ',' || c == '-')
-        .filter(|t| !t.is_empty())
-        .collect();
+    let toks: Vec<&str> = s.split([' ', ',', '-']).filter(|t| !t.is_empty()).collect();
     let mut out = Vec::new();
     for t in toks {
         out.push(u8::from_str_radix(t.trim_start_matches("0x"), 16).ok()?);

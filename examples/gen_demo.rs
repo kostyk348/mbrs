@@ -20,10 +20,15 @@ use mbrs::store::{PollGroup, Scale};
 use mbrs::workspace::Project;
 
 fn main() -> anyhow::Result<()> {
-    let mut p = Project::default();
-    p.conn = ConnConfig::default();
-    p.conn.unit = 1;
-    p.conn.timeout_ms = 1000;
+    let conn = ConnConfig {
+        unit: 1,
+        timeout_ms: 1000,
+        ..ConnConfig::default()
+    };
+    let mut p = Project {
+        conn,
+        ..Project::default()
+    };
 
     // Группа 1: 10 holding-регистров, как в «Setup → Read/Write Definition» Modbus Poll
     let mut g1 = PollGroup::new(1);

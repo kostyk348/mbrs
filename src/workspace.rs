@@ -143,9 +143,9 @@ mod tests {
         let json = serde_json::to_string(&Project::default()).unwrap();
         let needle = "\"host\":\"";
         let at = json.find(needle).expect("в проекте есть host") + needle.len();
-        let mut bytes = json[..at].as_bytes().to_vec();
+        let mut bytes = json.as_bytes()[..at].to_vec();
         bytes.push(0xE8); // 'и' в CP1251 — недопустимый байт для UTF-8
-        bytes.extend_from_slice(json[at..].as_bytes());
+        bytes.extend_from_slice(&json.as_bytes()[at..]);
         let path = tmp_path("mbrs_cp1251_test.mbw");
         std::fs::write(&path, &bytes).unwrap();
         let p = Project::load(&path).expect("не-UTF-8 файл должен открываться с потерями");

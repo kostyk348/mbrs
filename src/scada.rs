@@ -77,7 +77,7 @@ impl Tile {
 pub fn autolayout(tiles: &mut [Tile], cols: usize) {
     let cols = cols.max(1);
     let cw = 1.0f32 / cols as f32;
-    let rows = (tiles.len() + cols - 1) / cols;
+    let rows = tiles.len().div_ceil(cols);
     let ch = 1.0f32 / rows.max(1) as f32;
     for (i, t) in tiles.iter_mut().enumerate() {
         let c = i % cols;

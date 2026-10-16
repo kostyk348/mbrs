@@ -308,7 +308,7 @@ impl Transport {
                 if tid != self.tid {
                     bail!("transaction id mismatch ({} != {})", tid, self.tid);
                 }
-                if len < 1 || len > 260 {
+                if !(1..=260).contains(&len) {
                     bail!("bad MBAP length {len}");
                 }
                 let pdu = self.read_exact_n(len - 1)?;
@@ -618,34 +618,6 @@ pub fn is_bit_fc(fc: u8) -> bool {
     matches!(fc, FC_READ_COILS | FC_READ_DISCRETE)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn crc_known_vector() {
-        // "01 03 00 00 00 0A" -> CRC 0xCDC5 -> on the wire C5 CD
-        let c = crc16(&[0x01, 0x03, 0x00, 0x00, 0x00, 0x0A]);
-        assert_eq!(c, 0xCDC5);
-    }
-
-    #[test]
-    fn lrc_roundtrip() {
-        let body = [0x01u8, 0x03, 0x00, 0x00, 0x00, 0x0A];
-        let l = lrc(&body);
-        let mut b = body.to_vec();
-        b.push(l);
-        assert_eq!(lrc(&b), 0);
-    }
-
-    #[test]
-    fn bits_roundtrip() {
-        let v = vec![true, false, true, true, false, false, false, true, true];
-        let p = pack_bits(&v);
-        assert_eq!(unpack_bits(&p, v.len()), v);
-    }
-}
-
 /// Extended operations for the remaining dialogs (08, 0B, 11, 43/14, raw).
 impl Transport {
     /// Send an arbitrary PDU and return the raw response PDU.
@@ -733,5 +705,33 @@ pub fn diag_sub_name(sub: u16) -> &'static str {
         0x0011 => "Return Server Busy Count",
         0x0012 => "Return Bus Character Overrun Count",
         _ => "Unknown sub-function",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crc_known_vector() {
+        // "01 03 00 00 00 0A" -> CRC 0xCDC5 -> on the wire C5 CD
+        let c = crc16(&[0x01, 0x03, 0x00, 0x00, 0x00, 0x0A]);
+        assert_eq!(c, 0xCDC5);
+    }
+
+    #[test]
+    fn lrc_roundtrip() {
+        let body = [0x01u8, 0x03, 0x00, 0x00, 0x00, 0x0A];
+        let l = lrc(&body);
+        let mut b = body.to_vec();
+        b.push(l);
+        assert_eq!(lrc(&b), 0);
+    }
+
+    #[test]
+    fn bits_roundtrip() {
+        let v = vec![true, false, true, true, false, false, false, true, true];
+        let p = pack_bits(&v);
+        assert_eq!(unpack_bits(&p, v.len()), v);
     }
 }

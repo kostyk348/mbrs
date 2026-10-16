@@ -66,20 +66,11 @@ impl Default for LogConfig {
     }
 }
 
+#[derive(Default)]
 pub struct LogWriter {
     file: Option<BufWriter<File>>,
     path: Option<String>,
     wrote_header: bool,
-}
-
-impl Default for LogWriter {
-    fn default() -> Self {
-        Self {
-            file: None,
-            path: None,
-            wrote_header: false,
-        }
-    }
 }
 
 impl LogWriter {
