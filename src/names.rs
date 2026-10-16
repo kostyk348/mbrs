@@ -55,5 +55,7 @@ impl Names {
 
 /// Expand a u16 into per-bit names (used by the "show binary names" grid mode).
 pub fn bit_names(n: &Names) -> Vec<(u8, String)> {
-    (0..16u8).map(|b| (b, n.bit(b).cloned().unwrap_or_else(|| format!("bit {b}")))).collect()
+    (0..16u8)
+        .map(|b| (b, n.bit(b).cloned().unwrap_or_else(|| format!("bit {b}"))))
+        .collect()
 }

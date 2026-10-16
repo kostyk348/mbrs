@@ -36,7 +36,11 @@ impl LogPolicy {
             LogPolicy::Continue => "Continue",
         }
     }
-    pub const ALL: &'static [LogPolicy] = &[LogPolicy::StopAtEnd, LogPolicy::RestartAtEnd, LogPolicy::Continue];
+    pub const ALL: &'static [LogPolicy] = &[
+        LogPolicy::StopAtEnd,
+        LogPolicy::RestartAtEnd,
+        LogPolicy::Continue,
+    ];
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,7 +74,11 @@ pub struct LogWriter {
 
 impl Default for LogWriter {
     fn default() -> Self {
-        Self { file: None, path: None, wrote_header: false }
+        Self {
+            file: None,
+            path: None,
+            wrote_header: false,
+        }
     }
 }
 
@@ -95,12 +103,21 @@ impl LogWriter {
     }
 
     /// Write one row. `header` is only emitted once per file.
-    pub fn write_row(&mut self, cfg: &LogConfig, header: &[String], row: &[String]) -> std::io::Result<()> {
+    pub fn write_row(
+        &mut self,
+        cfg: &LogConfig,
+        header: &[String],
+        row: &[String],
+    ) -> std::io::Result<()> {
         if self.file.is_none() || self.path.as_deref() != Some(cfg.path.as_str()) {
             self.open(cfg)?;
         }
         let f = self.file.as_mut().unwrap();
-        let sep = if cfg.format == LogFormat::Csv { ',' } else { '\t' };
+        let sep = if cfg.format == LogFormat::Csv {
+            ','
+        } else {
+            '\t'
+        };
         if !self.wrote_header {
             f.write_all(header.join(&sep.to_string()).as_bytes())?;
             f.write_all(b"\n")?;

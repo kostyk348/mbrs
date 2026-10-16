@@ -23,7 +23,12 @@ impl TileKind {
             TileKind::Gauge => "Gauge",
         }
     }
-    pub const ALL: &'static [TileKind] = &[TileKind::Value, TileKind::Lamp, TileKind::Bar, TileKind::Gauge];
+    pub const ALL: &'static [TileKind] = &[
+        TileKind::Value,
+        TileKind::Lamp,
+        TileKind::Bar,
+        TileKind::Gauge,
+    ];
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

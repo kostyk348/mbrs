@@ -37,6 +37,8 @@ Bind tiles (Value / Lamp / Bar / Gauge) to registers and let the colour engine
 drive them — so a human never has to read raw register tables.
 
 ### Extras
+- **Virtualised register grid**: only the visible rows are built each frame (`src/grid.rs`),
+  so a 100 000-register window costs the same as a 30-row one.
 - Strip chart with min/max/last and history buffer.
 - Communication-traffic log (with error highlighting).
 - JSON workspace save/load; CSV export.

@@ -13,9 +13,9 @@ use crate::modbus::{
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -44,7 +44,14 @@ pub struct Scale {
 
 impl Default for Scale {
     fn default() -> Self {
-        Self { x1: 0.0, y1: 0.0, x2: 100.0, y2: 100.0, decimals: 2, enabled: false }
+        Self {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 100.0,
+            y2: 100.0,
+            decimals: 2,
+            enabled: false,
+        }
     }
 }
 
@@ -185,19 +192,71 @@ pub enum Cmd {
     UpdateGroup(PollGroup),
     RemoveGroup(u32),
     ClearGroups,
-    WriteReg { unit: u8, addr: u16, value: u16 },
-    WriteRegs { unit: u8, addr: u16, values: Vec<u16> },
-    WriteCoil { unit: u8, addr: u16, on: bool },
-    WriteCoils { unit: u8, addr: u16, values: Vec<bool> },
-    MaskWrite { unit: u8, addr: u16, and_mask: u16, or_mask: u16 },
-    ReadWriteMulti { unit: u8, read_addr: u16, read_qty: u16, write_addr: u16, values: Vec<u16> },
-    Raw { unit: u8, pdu: Vec<u8> },
-    Diagnostics { unit: u8, sub: u16, data: u16 },
-    CommEvent { unit: u8 },
-    ReportId { unit: u8 },
-    DeviceId { unit: u8, code: u8, obj: u8 },
-    ScanAddress { unit: u8, fc: u8, start: u16, end: u16 },
-    ScanSlave { fc: u8, addr: u16, start: u8, end: u8 },
+    WriteReg {
+        unit: u8,
+        addr: u16,
+        value: u16,
+    },
+    WriteRegs {
+        unit: u8,
+        addr: u16,
+        values: Vec<u16>,
+    },
+    WriteCoil {
+        unit: u8,
+        addr: u16,
+        on: bool,
+    },
+    WriteCoils {
+        unit: u8,
+        addr: u16,
+        values: Vec<bool>,
+    },
+    MaskWrite {
+        unit: u8,
+        addr: u16,
+        and_mask: u16,
+        or_mask: u16,
+    },
+    ReadWriteMulti {
+        unit: u8,
+        read_addr: u16,
+        read_qty: u16,
+        write_addr: u16,
+        values: Vec<u16>,
+    },
+    Raw {
+        unit: u8,
+        pdu: Vec<u8>,
+    },
+    Diagnostics {
+        unit: u8,
+        sub: u16,
+        data: u16,
+    },
+    CommEvent {
+        unit: u8,
+    },
+    ReportId {
+        unit: u8,
+    },
+    DeviceId {
+        unit: u8,
+        code: u8,
+        obj: u8,
+    },
+    ScanAddress {
+        unit: u8,
+        fc: u8,
+        start: u16,
+        end: u16,
+    },
+    ScanSlave {
+        fc: u8,
+        addr: u16,
+        start: u8,
+        end: u8,
+    },
     CancelScan,
     SetUnit(u8),
     Stop,
@@ -205,13 +264,24 @@ pub enum Cmd {
 
 fn ts() -> String {
     let now = std::time::SystemTime::now();
-    let d = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let d = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = d.as_secs() % 86400;
-    format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+    format!(
+        "{:02}:{:02}:{:02}",
+        secs / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
 }
 
 fn hexs(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")
+    bytes
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn push_traffic(sh: &SharedHandle, dir: char, text: String) {
@@ -276,8 +346,12 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.write_single_reg(addr, value) {
-                            Ok(()) => push_traffic(&shared, '>', format!("WRITE reg {addr} = {value}")),
-                            Err(e) => push_traffic(&shared, '!', format!("WRITE reg {addr} failed: {e}")),
+                            Ok(()) => {
+                                push_traffic(&shared, '>', format!("WRITE reg {addr} = {value}"))
+                            }
+                            Err(e) => {
+                                push_traffic(&shared, '!', format!("WRITE reg {addr} failed: {e}"))
+                            }
                         }
                     }
                 }
@@ -286,8 +360,16 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.write_regs(addr, &values) {
-                            Ok(()) => push_traffic(&shared, '>', format!("WRITE {} regs @ {addr}", values.len())),
-                            Err(e) => push_traffic(&shared, '!', format!("WRITE regs @ {addr} failed: {e}")),
+                            Ok(()) => push_traffic(
+                                &shared,
+                                '>',
+                                format!("WRITE {} regs @ {addr}", values.len()),
+                            ),
+                            Err(e) => push_traffic(
+                                &shared,
+                                '!',
+                                format!("WRITE regs @ {addr} failed: {e}"),
+                            ),
                         }
                     }
                 }
@@ -296,8 +378,12 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.write_single_coil(addr, on) {
-                            Ok(()) => push_traffic(&shared, '>', format!("WRITE coil {addr} = {on}")),
-                            Err(e) => push_traffic(&shared, '!', format!("WRITE coil {addr} failed: {e}")),
+                            Ok(()) => {
+                                push_traffic(&shared, '>', format!("WRITE coil {addr} = {on}"))
+                            }
+                            Err(e) => {
+                                push_traffic(&shared, '!', format!("WRITE coil {addr} failed: {e}"))
+                            }
                         }
                     }
                 }
@@ -306,22 +392,45 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.write_coils(addr, &values) {
-                            Ok(()) => push_traffic(&shared, '>', format!("WRITE {} coils @ {addr}", values.len())),
-                            Err(e) => push_traffic(&shared, '!', format!("WRITE coils @ {addr} failed: {e}")),
+                            Ok(()) => push_traffic(
+                                &shared,
+                                '>',
+                                format!("WRITE {} coils @ {addr}", values.len()),
+                            ),
+                            Err(e) => push_traffic(
+                                &shared,
+                                '!',
+                                format!("WRITE coils @ {addr} failed: {e}"),
+                            ),
                         }
                     }
                 }
-                Ok(Cmd::MaskWrite { unit, addr, and_mask, or_mask }) => {
+                Ok(Cmd::MaskWrite {
+                    unit,
+                    addr,
+                    and_mask,
+                    or_mask,
+                }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.mask_write_reg(addr, and_mask, or_mask) {
-                            Ok(()) => push_traffic(&shared, '>', format!("MASK WRITE {addr} and={and_mask:04X} or={or_mask:04X}")),
+                            Ok(()) => push_traffic(
+                                &shared,
+                                '>',
+                                format!("MASK WRITE {addr} and={and_mask:04X} or={or_mask:04X}"),
+                            ),
                             Err(e) => push_traffic(&shared, '!', format!("mask write failed: {e}")),
                         }
                     }
                 }
-                Ok(Cmd::ReadWriteMulti { unit, read_addr, read_qty, write_addr, values }) => {
+                Ok(Cmd::ReadWriteMulti {
+                    unit,
+                    read_addr,
+                    read_qty,
+                    write_addr,
+                    values,
+                }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
@@ -329,7 +438,14 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                             Ok(v) => {
                                 for (i, val) in v.iter().enumerate() {
                                     if let Ok(mut s) = shared.lock() {
-                                        s.words.insert(CellKey::new(unit, FC_READ_HOLDING, read_addr.wrapping_add(i as u16)), *val);
+                                        s.words.insert(
+                                            CellKey::new(
+                                                unit,
+                                                FC_READ_HOLDING,
+                                                read_addr.wrapping_add(i as u16),
+                                            ),
+                                            *val,
+                                        );
                                     }
                                 }
                                 push_traffic(&shared, '<', format!("RW read {} regs", v.len()));
@@ -367,7 +483,9 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                         match t.diagnostics(sub, data) {
                             Ok(v) => {
                                 push_traffic(&shared, '<', format!("DIAG {sub:#06X} = {v}"));
-                                if let Ok(mut s) = shared.lock() { s.diag = Some((sub, v)); }
+                                if let Ok(mut s) = shared.lock() {
+                                    s.diag = Some((sub, v));
+                                }
                             }
                             Err(e) => push_traffic(&shared, '!', format!("diag failed: {e}")),
                         }
@@ -378,7 +496,11 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.get_comm_event_counter() {
-                            Ok(v) => { if let Ok(mut s) = shared.lock() { s.comm_event = Some(v); } }
+                            Ok(v) => {
+                                if let Ok(mut s) = shared.lock() {
+                                    s.comm_event = Some(v);
+                                }
+                            }
                             Err(e) => push_traffic(&shared, '!', format!("0B failed: {e}")),
                         }
                     }
@@ -388,7 +510,11 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.report_server_id() {
-                            Ok(v) => { if let Ok(mut s) = shared.lock() { s.server_id = v; } }
+                            Ok(v) => {
+                                if let Ok(mut s) = shared.lock() {
+                                    s.server_id = v;
+                                }
+                            }
                             Err(e) => push_traffic(&shared, '!', format!("11 failed: {e}")),
                         }
                     }
@@ -398,16 +524,32 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     if let Some(t) = transport.as_mut() {
                         t.cfg.unit = unit;
                         match t.device_identification(code, obj) {
-                            Ok((objs, _more)) => { if let Ok(mut s) = shared.lock() { s.device_id = objs; } }
+                            Ok((objs, _more)) => {
+                                if let Ok(mut s) = shared.lock() {
+                                    s.device_id = objs;
+                                }
+                            }
                             Err(e) => push_traffic(&shared, '!', format!("2B/0E failed: {e}")),
                         }
                     }
                 }
-                Ok(Cmd::ScanAddress { unit, fc, start, end }) => {
+                Ok(Cmd::ScanAddress {
+                    unit,
+                    fc,
+                    start,
+                    end,
+                }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
                     let cancel = {
                         let mut s = shared.lock().unwrap();
-                        s.scan = ScanState { running: true, kind: 0, cur: start, end, found: Vec::new(), errors: 0 };
+                        s.scan = ScanState {
+                            running: true,
+                            kind: 0,
+                            cur: start,
+                            end,
+                            found: Vec::new(),
+                            errors: 0,
+                        };
                         s.scan_cancel.store(false, Ordering::SeqCst);
                         s.scan_cancel.clone()
                     };
@@ -417,13 +559,27 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                         do_scan_address(t, &shared, &cancel, unit, fc, start, end);
                         t.cfg.timeout_ms = old;
                     }
-                    if let Ok(mut s) = shared.lock() { s.scan.running = false; }
+                    if let Ok(mut s) = shared.lock() {
+                        s.scan.running = false;
+                    }
                 }
-                Ok(Cmd::ScanSlave { fc, addr, start, end }) => {
+                Ok(Cmd::ScanSlave {
+                    fc,
+                    addr,
+                    start,
+                    end,
+                }) => {
                     ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);
                     let cancel = {
                         let mut s = shared.lock().unwrap();
-                        s.scan = ScanState { running: true, kind: 1, cur: start as u16, end: end as u16, found: Vec::new(), errors: 0 };
+                        s.scan = ScanState {
+                            running: true,
+                            kind: 1,
+                            cur: start as u16,
+                            end: end as u16,
+                            found: Vec::new(),
+                            errors: 0,
+                        };
                         s.scan_cancel.store(false, Ordering::SeqCst);
                         s.scan_cancel.clone()
                     };
@@ -433,10 +589,14 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                         do_scan_slave(t, &shared, &cancel, fc, addr, start, end);
                         t.cfg.timeout_ms = old;
                     }
-                    if let Ok(mut s) = shared.lock() { s.scan.running = false; }
+                    if let Ok(mut s) = shared.lock() {
+                        s.scan.running = false;
+                    }
                 }
                 Ok(Cmd::CancelScan) => {
-                    if let Ok(s) = shared.lock() { s.scan_cancel.store(true, Ordering::SeqCst); }
+                    if let Ok(s) = shared.lock() {
+                        s.scan_cancel.store(true, Ordering::SeqCst);
+                    }
                 }
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => return,
@@ -475,7 +635,8 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                     Err(e) => {
                         s.stats.err += 1;
                         s.stats.last_error = e.to_string();
-                        if e.to_string().contains("timed out") || e.to_string().contains("timeout") {
+                        if e.to_string().contains("timed out") || e.to_string().contains("timeout")
+                        {
                             s.stats.timeouts += 1;
                         }
                     }
@@ -522,19 +683,29 @@ fn ensure_conn(
 fn poll_group(t: &mut Transport, g: &PollGroup, shared: &SharedHandle) -> Result<()> {
     t.cfg.unit = g.unit;
     if g.is_bit() {
-        let fc = if g.fc == FC_READ_COILS { FC_READ_COILS } else { FC_READ_DISCRETE };
+        let fc = if g.fc == FC_READ_COILS {
+            FC_READ_COILS
+        } else {
+            FC_READ_DISCRETE
+        };
         let bits = t.read_bits(fc, g.start, g.count)?;
         if let Ok(mut s) = shared.lock() {
             for (i, b) in bits.iter().enumerate() {
-                s.bits.insert(CellKey::new(g.unit, g.fc, g.start + i as u16), *b);
+                s.bits
+                    .insert(CellKey::new(g.unit, g.fc, g.start + i as u16), *b);
             }
         }
     } else {
-        let fc = if g.fc == FC_READ_INPUT { FC_READ_INPUT } else { FC_READ_HOLDING };
+        let fc = if g.fc == FC_READ_INPUT {
+            FC_READ_INPUT
+        } else {
+            FC_READ_HOLDING
+        };
         let regs = t.read_regs(fc, g.start, g.count)?;
         if let Ok(mut s) = shared.lock() {
             for (i, v) in regs.iter().enumerate() {
-                s.words.insert(CellKey::new(g.unit, g.fc, g.start + i as u16), *v);
+                s.words
+                    .insert(CellKey::new(g.unit, g.fc, g.start + i as u16), *v);
             }
             if g.chart {
                 let key = CellKey::new(g.unit, g.fc, g.start);
@@ -558,10 +729,19 @@ pub fn label_for_fc(fc: u8) -> &'static str {
 /// Convert a register-or-coil read into an "f64 view" for colouring.
 pub fn value_of(shared: &Shared, k: CellKey, fmt: ValueFormat) -> f64 {
     if is_bit_fc(k.fc) {
-        shared.bits.get(&k).map(|b| if *b { 1.0 } else { 0.0 }).unwrap_or(f64::NAN)
+        shared
+            .bits
+            .get(&k)
+            .map(|b| if *b { 1.0 } else { 0.0 })
+            .unwrap_or(f64::NAN)
     } else {
         let regs: Vec<u16> = (0..fmt.regs_needed() as u16)
-            .filter_map(|o| shared.words.get(&CellKey::new(k.unit, k.fc, k.addr.wrapping_add(o))).copied())
+            .filter_map(|o| {
+                shared
+                    .words
+                    .get(&CellKey::new(k.unit, k.fc, k.addr.wrapping_add(o)))
+                    .copied()
+            })
             .collect();
         if regs.is_empty() {
             f64::NAN
@@ -573,7 +753,12 @@ pub fn value_of(shared: &Shared, k: CellKey, fmt: ValueFormat) -> f64 {
 
 pub fn regs_of(shared: &Shared, k: CellKey, fmt: ValueFormat) -> Vec<u16> {
     (0..fmt.regs_needed() as u16)
-        .filter_map(|o| shared.words.get(&CellKey::new(k.unit, k.fc, k.addr.wrapping_add(o))).copied())
+        .filter_map(|o| {
+            shared
+                .words
+                .get(&CellKey::new(k.unit, k.fc, k.addr.wrapping_add(o)))
+                .copied()
+        })
         .collect()
 }
 
@@ -607,7 +792,13 @@ fn do_scan_address(
             s.scan.cur = a;
         }
         let res = if is_bit_fc(fc) {
-            t.read_bits(fc, a, 1).map(|b| if b[0] { "ON".to_string() } else { "off".to_string() })
+            t.read_bits(fc, a, 1).map(|b| {
+                if b[0] {
+                    "ON".to_string()
+                } else {
+                    "off".to_string()
+                }
+            })
         } else {
             t.read_regs(fc, a, 1).map(|v| v[0].to_string())
         };

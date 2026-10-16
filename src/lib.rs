@@ -4,6 +4,7 @@
 
 pub mod colors;
 pub mod formats;
+pub mod grid;
 pub mod logging;
 pub mod modbus;
 pub mod names;

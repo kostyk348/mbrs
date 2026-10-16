@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WordOrder {
-    BigEndian,          // AB CD
-    LittleEndian,       // CD AB
-    BigEndianByteSwap,  // BA DC
+    BigEndian,            // AB CD
+    LittleEndian,         // CD AB
+    BigEndianByteSwap,    // BA DC
     LittleEndianByteSwap, // DC BA
 }
 
@@ -82,7 +82,10 @@ impl ValueFormat {
     fn bytes(self, regs: &[u16]) -> Vec<u8> {
         let mut words: Vec<[u8; 2]> = regs.iter().map(|r| r.to_be_bytes()).collect();
         let order = match self {
-            ValueFormat::U32(o) | ValueFormat::I32(o) | ValueFormat::Hex32(o) | ValueFormat::F32(o) => o,
+            ValueFormat::U32(o)
+            | ValueFormat::I32(o)
+            | ValueFormat::Hex32(o)
+            | ValueFormat::F32(o) => o,
             ValueFormat::U64(o) | ValueFormat::I64(o) | ValueFormat::F64(o) => o,
             _ => WordOrder::BigEndian,
         };
@@ -186,7 +189,13 @@ impl ValueFormat {
             ValueFormat::Ascii16 => {
                 let b = regs[0].to_be_bytes();
                 b.iter()
-                    .map(|c| if (0x20..0x7F).contains(c) { *c as char } else { '.' })
+                    .map(|c| {
+                        if (0x20..0x7F).contains(c) {
+                            *c as char
+                        } else {
+                            '.'
+                        }
+                    })
                     .collect()
             }
             ValueFormat::U32(_) => format!("{}", self.numeric(regs) as u64),
@@ -204,11 +213,19 @@ impl ValueFormat {
         let t = text.trim();
         match self {
             ValueFormat::U16 | ValueFormat::U16Swapped => t.parse::<u16>().ok().map(|v| {
-                vec![if self == ValueFormat::U16Swapped { v.swap_bytes() } else { v }]
+                vec![if self == ValueFormat::U16Swapped {
+                    v.swap_bytes()
+                } else {
+                    v
+                }]
             }),
             ValueFormat::I16 => t.parse::<i16>().ok().map(|v| vec![v as u16]),
-            ValueFormat::Hex16 => u16::from_str_radix(t.trim_start_matches("0x"), 16).ok().map(|v| vec![v]),
-            ValueFormat::Bin16 => u16::from_str_radix(t.trim_start_matches("0b"), 2).ok().map(|v| vec![v]),
+            ValueFormat::Hex16 => u16::from_str_radix(t.trim_start_matches("0x"), 16)
+                .ok()
+                .map(|v| vec![v]),
+            ValueFormat::Bin16 => u16::from_str_radix(t.trim_start_matches("0b"), 2)
+                .ok()
+                .map(|v| vec![v]),
             ValueFormat::Ascii16 => {
                 let b = t.as_bytes();
                 if b.len() >= 2 {
@@ -263,7 +280,11 @@ fn regs_from_u32(v: u32, o: WordOrder) -> Vec<u16> {
 fn format_float(v: f64, double: bool) -> String {
     if v.is_finite() {
         // trim trailing zeros but keep a visible fraction
-        let s = if double { format!("{:.6}", v) } else { format!("{:.4}", v) };
+        let s = if double {
+            format!("{:.6}", v)
+        } else {
+            format!("{:.4}", v)
+        };
         let s = s.trim_end_matches('0').trim_end_matches('.').to_string();
         if s.is_empty() || s == "-" {
             "0".into()
@@ -291,21 +312,35 @@ mod tests {
 
     #[test]
     fn u32_orders() {
-        assert_eq!(ValueFormat::U32(WordOrder::BigEndian).numeric(&[0x075B, 0xCD15]), 123456789.0);
-        assert_eq!(ValueFormat::U32(WordOrder::LittleEndian).numeric(&[0xCD15, 0x075B]), 123456789.0);
-        assert_eq!(ValueFormat::format(ValueFormat::Hex32(WordOrder::BigEndian), &[0x075B, 0xCD15]), "075BCD15");
+        assert_eq!(
+            ValueFormat::U32(WordOrder::BigEndian).numeric(&[0x075B, 0xCD15]),
+            123456789.0
+        );
+        assert_eq!(
+            ValueFormat::U32(WordOrder::LittleEndian).numeric(&[0xCD15, 0x075B]),
+            123456789.0
+        );
+        assert_eq!(
+            ValueFormat::format(ValueFormat::Hex32(WordOrder::BigEndian), &[0x075B, 0xCD15]),
+            "075BCD15"
+        );
     }
 
     #[test]
     fn f32_decode() {
         // 1.0 == 0x3F800000
-        assert_eq!(ValueFormat::F32(WordOrder::BigEndian).numeric(&[0x3F80, 0x0000]), 1.0);
+        assert_eq!(
+            ValueFormat::F32(WordOrder::BigEndian).numeric(&[0x3F80, 0x0000]),
+            1.0
+        );
     }
 
     #[test]
     fn parse_roundtrip() {
         let s = ValueFormat::U32(WordOrder::BigEndian).format(&[0x075B, 0xCD15]);
-        let r = ValueFormat::U32(WordOrder::BigEndian).parse_to_regs(&s).unwrap();
+        let r = ValueFormat::U32(WordOrder::BigEndian)
+            .parse_to_regs(&s)
+            .unwrap();
         assert_eq!(r, vec![0x075B, 0xCD15]);
     }
 }

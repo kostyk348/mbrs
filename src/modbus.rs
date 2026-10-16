@@ -72,7 +72,11 @@ impl Default for ConnConfig {
             mode: Mode::Tcp,
             host: "127.0.0.1".into(),
             port: 502,
-            serial_port: if cfg!(windows) { "COM3".into() } else { "/dev/ttyUSB0".into() },
+            serial_port: if cfg!(windows) {
+                "COM3".into()
+            } else {
+                "/dev/ttyUSB0".into()
+            },
             baud: 9600,
             data_bits: 8,
             parity: 'N',
@@ -121,8 +125,12 @@ fn hex_decode(s: &str) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(bytes.len() / 2);
     let mut i = 0;
     while i < bytes.len() {
-        let hi = (bytes[i] as char).to_digit(16).ok_or_else(|| anyhow::anyhow!("bad hex"))?;
-        let lo = (bytes[i + 1] as char).to_digit(16).ok_or_else(|| anyhow::anyhow!("bad hex"))?;
+        let hi = (bytes[i] as char)
+            .to_digit(16)
+            .ok_or_else(|| anyhow::anyhow!("bad hex"))?;
+        let lo = (bytes[i + 1] as char)
+            .to_digit(16)
+            .ok_or_else(|| anyhow::anyhow!("bad hex"))?;
         out.push(((hi << 4) | lo) as u8);
         i += 2;
     }
@@ -172,7 +180,11 @@ impl Transport {
                     'O' => Parity::Odd,
                     _ => Parity::None,
                 };
-                let sb = if cfg.stop_bits == 2 { StopBits::Two } else { StopBits::One };
+                let sb = if cfg.stop_bits == 2 {
+                    StopBits::Two
+                } else {
+                    StopBits::One
+                };
                 let p = serialport::new(cfg.serial_port.clone(), cfg.baud)
                     .data_bits(db)
                     .parity(par)
@@ -426,7 +438,14 @@ impl Transport {
 
     pub fn write_regs(&mut self, addr: u16, vals: &[u16]) -> Result<()> {
         let qty = vals.len() as u16;
-        let mut pdu = vec![FC_WRITE_REGS, hi(addr), lo(addr), hi(qty), lo(qty), (vals.len() * 2) as u8];
+        let mut pdu = vec![
+            FC_WRITE_REGS,
+            hi(addr),
+            lo(addr),
+            hi(qty),
+            lo(qty),
+            (vals.len() * 2) as u8,
+        ];
         for v in vals {
             pdu.push(hi(*v));
             pdu.push(lo(*v));
@@ -438,7 +457,14 @@ impl Transport {
     pub fn write_coils(&mut self, addr: u16, vals: &[bool]) -> Result<()> {
         let qty = vals.len() as u16;
         let packed = pack_bits(vals);
-        let mut pdu = vec![FC_WRITE_COILS, hi(addr), lo(addr), hi(qty), lo(qty), packed.len() as u8];
+        let mut pdu = vec![
+            FC_WRITE_COILS,
+            hi(addr),
+            lo(addr),
+            hi(qty),
+            lo(qty),
+            packed.len() as u8,
+        ];
         pdu.extend_from_slice(&packed);
         self.transact(&pdu)?;
         Ok(())
@@ -653,7 +679,11 @@ impl Transport {
     }
 
     /// FC 43/14 (0x2B/0x0E) Read Device Identification. Returns (objects, more_follows).
-    pub fn device_identification(&mut self, read_code: u8, object_id: u8) -> Result<(Vec<(u8, String)>, bool)> {
+    pub fn device_identification(
+        &mut self,
+        read_code: u8,
+        object_id: u8,
+    ) -> Result<(Vec<(u8, String)>, bool)> {
         let r = self.transact(&[FC_READ_DEVICE_ID, 0x0E, read_code, object_id])?;
         Ok(parse_device_id(&r))
     }

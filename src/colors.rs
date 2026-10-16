@@ -80,7 +80,11 @@ impl Palette {
 
 fn lerp(a: [u8; 3], b: [u8; 3], t: f64) -> [u8; 3] {
     let t = t.clamp(0.0, 1.0);
-    let f = |x: u8, y: u8| (x as f64 + (y as f64 - x as f64) * t).round().clamp(0.0, 255.0) as u8;
+    let f = |x: u8, y: u8| {
+        (x as f64 + (y as f64 - x as f64) * t)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
     [f(a[0], b[0]), f(a[1], b[1]), f(a[2], b[2])]
 }
 
@@ -102,10 +106,25 @@ pub fn palette_color(p: Palette, t: f64) -> [u8; 3] {
     match p {
         Palette::Traffic => ramp(&[[0, 160, 0], [230, 200, 0], [200, 20, 20]], t),
         Palette::Rainbow => ramp(
-            &[[40, 60, 200], [0, 190, 220], [40, 180, 40], [230, 220, 0], [210, 30, 30]],
+            &[
+                [40, 60, 200],
+                [0, 190, 220],
+                [40, 180, 40],
+                [230, 220, 0],
+                [210, 30, 30],
+            ],
             t,
         ),
-        Palette::Viridis => ramp(&[[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]], t),
+        Palette::Viridis => ramp(
+            &[
+                [68, 1, 84],
+                [59, 82, 139],
+                [33, 145, 140],
+                [94, 201, 98],
+                [253, 231, 37],
+            ],
+            t,
+        ),
         Palette::Heat => ramp(&[[0, 0, 0], [150, 0, 0], [255, 90, 0], [255, 230, 120]], t),
         Palette::Cool => ramp(&[[0, 200, 210], [0, 80, 200], [180, 40, 200]], t),
         Palette::Greys => ramp(&[[30, 30, 30], [230, 230, 230]], t),
@@ -240,7 +259,8 @@ impl ColorMode {
             ColorMode::Smooth => "Smooth ramp",
         }
     }
-    pub const ALL: &'static [ColorMode] = &[ColorMode::Rules, ColorMode::Discrete, ColorMode::Smooth];
+    pub const ALL: &'static [ColorMode] =
+        &[ColorMode::Rules, ColorMode::Discrete, ColorMode::Smooth];
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -350,7 +370,11 @@ mod tests {
         for i in 0..32 {
             set.insert(cm.color_for(i as f64, 0).0);
         }
-        assert!(set.len() >= 32, "expected >=32 distinct colours, got {}", set.len());
+        assert!(
+            set.len() >= 32,
+            "expected >=32 distinct colours, got {}",
+            set.len()
+        );
     }
 
     #[test]
