@@ -259,6 +259,8 @@ pub enum Cmd {
     },
     CancelScan,
     SetUnit(u8),
+    /// Начать/остановить опрос: по умолчанию воркер стоит на паузе и в сеть не лезет.
+    SetRunning(bool),
     Stop,
 }
 
@@ -310,6 +312,8 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
     let mut next_due: HashMap<u32, Instant> = HashMap::new();
     let mut last_reconnect = Instant::now() - Duration::from_secs(10);
     let mut cfg = cfg;
+    // Опрос не начинается сам: приложение не должно лезть в сеть/порт при запуске.
+    let mut running = false;
 
     loop {
         // Drain commands.
@@ -319,6 +323,13 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                 Ok(Cmd::SetUnit(u)) => {
                     cfg.unit = u;
                     transport = None;
+                }
+                Ok(Cmd::SetRunning(r)) => {
+                    running = r;
+                    // Пауза = разорвать соединение, а не держать его «на всякий случай».
+                    if !r {
+                        transport = None;
+                    }
                 }
                 Ok(Cmd::AddGroup(mut g)) => {
                     if g.id == 0 || groups.iter().any(|x| x.id == g.id) {
@@ -601,6 +612,12 @@ fn worker(cfg: ConnConfig, shared: SharedHandle, rx: Receiver<Cmd>) {
                 Err(RecvTimeoutError::Timeout) => break,
                 Err(RecvTimeoutError::Disconnected) => return,
             }
+        }
+
+        // Пока пользователь не нажал Connect — ни соединения, ни опроса.
+        if !running {
+            std::thread::sleep(Duration::from_millis(20));
+            continue;
         }
 
         ensure_conn(&mut transport, &cfg, &shared, &mut last_reconnect);

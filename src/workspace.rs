@@ -51,6 +51,16 @@ impl Project {
 
     pub fn load(path: &str) -> Result<Self> {
         let data = read_workspace_text(path)?;
+        // Файлы Modbus Poll (`*.mbp`, `*.mbw`) — не JSON, а бинарный формат MFC-сериализации:
+        // валидатор JSON выдавал на них «expected value at line 1 column 1», что ничего не
+        // объясняет. Говорим, что именно не так и что с этим делать.
+        if !data.trim_start().starts_with('{') {
+            let head: String = data.chars().filter(|c| !c.is_control()).take(24).collect();
+            return Err(anyhow::anyhow!(
+                "не JSON-проект mbrs (файл начинается с \"{head}\"); похоже на бинарный файл \
+                 Modbus Poll (*.mbp / *.mbw) — импорт этого формата пока не реализован"
+            ));
+        }
         let mut p: Project = serde_json::from_str(&data)?;
         if p.version == 0 {
             p.version = FORMAT_VERSION;
@@ -155,6 +165,25 @@ mod tests {
             Ok(v) => assert_eq!(v.groups.len(), 3),
             Err(e) => panic!("Project::load(examples/demo.mbw) вернул ошибку: {e}"),
         }
+    }
+
+    #[test]
+    fn binary_modbus_poll_file_explains_itself() {
+        // .mbp/.mbw от Modbus Poll — бинарный формат: раньше пользователь видел
+        // «expected value at line 1 column 1» и не понимал, в чём дело.
+        let path = tmp_path("mbrs_mbp_test.mbp");
+        std::fs::write(&path, [0x58u8, 0x1b, 0x00, 0x00, 0xff, 0xfe, 0x00, 0x01]).unwrap();
+        match Project::load(&path) {
+            Ok(_) => panic!("бинарный файл не должен читаться как проект mbrs"),
+            Err(e) => {
+                let err = e.to_string();
+                assert!(
+                    err.contains("Modbus Poll"),
+                    "сообщение должно называть формат: {err}"
+                );
+            }
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

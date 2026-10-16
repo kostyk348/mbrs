@@ -91,6 +91,8 @@ pub struct MbApp {
     view: View,
     modal: Modal,
     selected: Option<CellKey>,
+    /// Опрос идёт только после кнопки Connect (при запуске — нет).
+    running: bool,
     /// Ячейка, которую сейчас правят прямо в таблице (двойной клик). Текст живёт в `write_buf`,
     /// чтобы панель записи и правка в ячейке не разъезжались.
     edit_cell: Option<CellKey>,
@@ -161,6 +163,7 @@ impl MbApp {
             view: View::Grid,
             modal: Modal::None,
             selected: None,
+            running: false,
             edit_cell: None,
             write_buf: String::new(),
             path_buf: mbrs::paths::default_path("workspace.mbw"),
@@ -382,7 +385,10 @@ impl eframe::App for MbApp {
                     ui.separator();
                     ui.label(format!("workspace: {}", self.path_buf));
                     if ui.button("Open workspace…\tCtrl+O").clicked() {
-                        if let Some(p) = pick_open("mbrs workspace (*.mbw)", "mbw") {
+                        if let Some(p) = pick_open_multi(
+                            "workspace (*.mbw, *.mbp, *.json)",
+                            &["mbw", "mbp", "json"],
+                        ) {
                             self.path_buf = p;
                             self.project_open();
                         }
@@ -687,8 +693,17 @@ impl eframe::App for MbApp {
                     }
                 }
                 ui.separator();
-                if ui.button("Connect").clicked() {
-                    self.restart_worker();
+                let conn_label = if self.running {
+                    "Disconnect"
+                } else {
+                    "Connect"
+                };
+                if ui.button(conn_label).clicked() {
+                    self.running = !self.running;
+                    if self.running {
+                        self.restart_worker();
+                    }
+                    pending.push(Cmd::SetRunning(self.running));
                 }
                 if ui.button("Definition").clicked() {
                     if let Some(g) = self.active() {
@@ -2485,8 +2500,14 @@ fn setup_style(ctx: &egui::Context) {
 }
 
 fn pick_open(desc: &str, ext: &str) -> Option<String> {
+    pick_open_multi(desc, &[ext])
+}
+
+/// Диалог открытия с несколькими расширениями: пользователю важно видеть и свои
+/// файлы Modbus Poll (`*.mbp` — бинарный формат оригинала), а не только наши `*.mbw`.
+fn pick_open_multi(desc: &str, exts: &[&str]) -> Option<String> {
     rfd::FileDialog::new()
-        .add_filter(desc, &[ext])
+        .add_filter(desc, exts)
         .pick_file()
         .map(|p| p.to_string_lossy().to_string())
 }
