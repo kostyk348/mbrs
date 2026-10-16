@@ -4,6 +4,9 @@
 //! Modbus Poll, but with a much more powerful value->colour engine
 //! (N rules + 32-level / smooth ramps) and a SCADA-style tile view.
 #![allow(dead_code)]
+// Без этого при запуске .exe под Windows открывается пустая консоль (и закрывается
+// вместе с приложением). В отладочной сборке консоль оставляем — там нужны логи.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
 

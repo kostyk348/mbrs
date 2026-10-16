@@ -91,6 +91,9 @@ pub struct MbApp {
     view: View,
     modal: Modal,
     selected: Option<CellKey>,
+    /// Ячейка, которую сейчас правят прямо в таблице (двойной клик). Текст живёт в `write_buf`,
+    /// чтобы панель записи и правка в ячейке не разъезжались.
+    edit_cell: Option<CellKey>,
     write_buf: String,
     path_buf: String,
     status: String,
@@ -158,6 +161,7 @@ impl MbApp {
             view: View::Grid,
             modal: Modal::None,
             selected: None,
+            edit_cell: None,
             write_buf: String::new(),
             path_buf: "/home/lain/mbrs-workspace.mbw".into(),
             status: "ready".into(),
@@ -904,6 +908,38 @@ impl MbApp {
         }
     }
 
+    /// Записать то, что набрано в `write_buf`, в устройство по ячейке `key`.
+    /// Используется и панелью записи, и правкой прямо в таблице.
+    fn commit_cell_edit(&mut self, key: CellKey, g: &PollGroup, pending: &mut Vec<Cmd>) {
+        if is_bit_fc_key(key) {
+            let on = matches!(self.write_buf.trim(), "1" | "true" | "on" | "ON");
+            pending.push(Cmd::WriteCoil {
+                unit: key.unit,
+                addr: key.addr,
+                on,
+            });
+            self.status = format!("write coil {} = {}", key.addr, on);
+        } else if let Some(regs) = g.format.parse_to_regs(&self.write_buf) {
+            if regs.len() == 1 {
+                pending.push(Cmd::WriteReg {
+                    unit: key.unit,
+                    addr: key.addr,
+                    value: regs[0],
+                });
+            } else {
+                pending.push(Cmd::WriteRegs {
+                    unit: key.unit,
+                    addr: key.addr,
+                    values: regs,
+                });
+            }
+            self.status = format!("write {} = {}", key.addr, self.write_buf.trim());
+        } else {
+            self.status = "cannot parse value".into();
+        }
+        self.edit_cell = None;
+    }
+
     fn draw_grid(&mut self, ui: &mut egui::Ui, snap: &Snap, pending: &mut Vec<Cmd>) {
         let Some(g) = self.project.groups.get(self.active_group).cloned() else {
             ui.label("No poll group. Use ＋ group.");
@@ -1028,19 +1064,41 @@ impl MbApp {
                                         let val = if on { 1.0 } else { 0.0 };
                                         let (bg, fg) =
                                             g.color.color_for(val, if on { 1 } else { 0 });
-                                        let resp = draw_cell(
-                                            ui,
-                                            90.0,
-                                            row_h,
-                                            if on { "1" } else { "0" },
-                                            bg,
-                                            fg,
-                                            self.selected == Some(key),
-                                        );
-                                        if resp.clicked() {
-                                            self.selected = Some(key);
-                                            self.write_buf =
-                                                if on { "1".into() } else { "0".into() };
+                                        if self.edit_cell == Some(key) {
+                                            match edit_cell(
+                                                ui,
+                                                90.0,
+                                                row_h,
+                                                &mut self.write_buf,
+                                                bg,
+                                            ) {
+                                                CellEdit::Commit => {
+                                                    self.commit_cell_edit(key, &g, pending)
+                                                }
+                                                CellEdit::Cancel => self.edit_cell = None,
+                                                CellEdit::Still => {}
+                                            }
+                                        } else {
+                                            let resp = draw_cell(
+                                                ui,
+                                                90.0,
+                                                row_h,
+                                                if on { "1" } else { "0" },
+                                                bg,
+                                                fg,
+                                                self.selected == Some(key),
+                                            );
+                                            if resp.clicked() {
+                                                self.selected = Some(key);
+                                                self.write_buf =
+                                                    if on { "1".into() } else { "0".into() };
+                                            }
+                                            if resp.double_clicked() {
+                                                self.selected = Some(key);
+                                                self.edit_cell = Some(key);
+                                                self.write_buf =
+                                                    if on { "1".into() } else { "0".into() };
+                                            }
                                         }
                                         let nm = self.names.bit(0).cloned().unwrap_or_default();
                                         let _ = nm;
@@ -1106,18 +1164,40 @@ impl MbApp {
                                                 };
                                                 let (bg, fg) =
                                                     g.color.color_for(scaled, regs[0] as u64);
-                                                let resp = draw_cell(
-                                                    ui,
-                                                    190.0,
-                                                    row_h,
-                                                    &shown,
-                                                    bg,
-                                                    fg,
-                                                    self.selected == Some(key),
-                                                );
-                                                if resp.clicked() {
-                                                    self.selected = Some(key);
-                                                    self.write_buf = g.format.format(&regs);
+                                                if self.edit_cell == Some(key) {
+                                                    // двойной клик по значению — правим прямо в таблице
+                                                    match edit_cell(
+                                                        ui,
+                                                        190.0,
+                                                        row_h,
+                                                        &mut self.write_buf,
+                                                        bg,
+                                                    ) {
+                                                        CellEdit::Commit => {
+                                                            self.commit_cell_edit(key, &g, pending)
+                                                        }
+                                                        CellEdit::Cancel => self.edit_cell = None,
+                                                        CellEdit::Still => {}
+                                                    }
+                                                } else {
+                                                    let resp = draw_cell(
+                                                        ui,
+                                                        190.0,
+                                                        row_h,
+                                                        &shown,
+                                                        bg,
+                                                        fg,
+                                                        self.selected == Some(key),
+                                                    );
+                                                    if resp.clicked() {
+                                                        self.selected = Some(key);
+                                                        self.write_buf = g.format.format(&regs);
+                                                    }
+                                                    if resp.double_clicked() {
+                                                        self.selected = Some(key);
+                                                        self.edit_cell = Some(key);
+                                                        self.write_buf = g.format.format(&regs);
+                                                    }
                                                 }
                                                 if let Some(t) = self.names.text(regs[0]) {
                                                     ui.label(t);
@@ -1220,7 +1300,11 @@ impl MbApp {
                 tr,
                 6.0,
                 Stroke::new(
-                    if self.sel_tile == Some(i) { 2.5_f32 } else { 1.0_f32 },
+                    if self.sel_tile == Some(i) {
+                        2.5_f32
+                    } else {
+                        1.0_f32
+                    },
                     if self.sel_tile == Some(i) {
                         Color32::from_rgb(90, 160, 255)
                     } else {
@@ -1264,7 +1348,11 @@ impl MbApp {
                 TileKind::Lamp => {
                     let r = tr.height().min(tr.width()) * 0.22;
                     p.circle_filled(tr.center() + egui::vec2(0.0, 6.0), r, bgc);
-                    p.circle_stroke(tr.center() + egui::vec2(0.0, 6.0), r, Stroke::new(2.0_f32, fgc));
+                    p.circle_stroke(
+                        tr.center() + egui::vec2(0.0, 6.0),
+                        r,
+                        Stroke::new(2.0_f32, fgc),
+                    );
                     p.text(
                         tr.center() + egui::vec2(0.0, r + 18.0),
                         Align2::CENTER_CENTER,
@@ -1290,7 +1378,11 @@ impl MbApp {
                         egui::vec2(inner.width() * frac, inner.height()),
                     );
                     p.rect_filled(fill, 3.0, bgc);
-                    p.rect_stroke(inner, 3.0, Stroke::new(1.0_f32, Color32::from_rgb(70, 70, 80)));
+                    p.rect_stroke(
+                        inner,
+                        3.0,
+                        Stroke::new(1.0_f32, Color32::from_rgb(70, 70, 80)),
+                    );
                     p.text(
                         tr.center() + egui::vec2(0.0, 6.0),
                         Align2::CENTER_CENTER,
@@ -2421,7 +2513,11 @@ fn draw_cell(
     let p = ui.painter();
     p.rect_filled(rect, 3.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
     if selected {
-        p.rect_stroke(rect, 3.0, Stroke::new(2.0_f32, Color32::from_rgb(90, 160, 255)));
+        p.rect_stroke(
+            rect,
+            3.0,
+            Stroke::new(2.0_f32, Color32::from_rgb(90, 160, 255)),
+        );
     }
     p.text(
         rect.center(),
@@ -2431,6 +2527,47 @@ fn draw_cell(
         Color32::from_rgb(fg[0], fg[1], fg[2]),
     );
     resp
+}
+
+/// Что произошло с ячейкой, которую правят на месте.
+enum CellEdit {
+    Still,
+    Commit,
+    Cancel,
+}
+
+/// Ячейка-редактор: поле ввода прямо в таблице (двойной клик по значению, как в Modbus Poll).
+/// Enter — записать, Esc — отменить; пока идёт правка, фокус держится на поле.
+fn edit_cell(ui: &mut egui::Ui, w: f32, h: f32, buf: &mut String, bg: [u8; 3]) -> CellEdit {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
+    ui.painter()
+        .rect_filled(rect, 3.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        Stroke::new(1.5_f32, Color32::from_rgb(90, 160, 255)),
+    );
+    let resp = ui.put(
+        rect.shrink2(egui::vec2(3.0, 2.0)),
+        egui::TextEdit::singleline(buf)
+            .font(FontId::monospace(13.0))
+            .horizontal_align(egui::Align::Center)
+            .desired_width(w - 6.0),
+    );
+    resp.request_focus();
+    let (enter, esc) = ui.input(|i| {
+        (
+            i.key_pressed(egui::Key::Enter),
+            i.key_pressed(egui::Key::Escape),
+        )
+    });
+    if esc {
+        CellEdit::Cancel
+    } else if enter {
+        CellEdit::Commit
+    } else {
+        CellEdit::Still
+    }
 }
 
 fn draw_cell_static(ui: &mut egui::Ui, w: f32, h: f32, text: &str, bg: [u8; 3], fg: [u8; 3]) {
