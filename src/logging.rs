@@ -57,7 +57,7 @@ impl Default for LogConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            path: "/home/lain/mbrs-log.csv".into(),
+            path: crate::paths::default_path("log.csv"),
             format: LogFormat::Csv,
             interval_ms: 1000,
             policy: LogPolicy::Continue,

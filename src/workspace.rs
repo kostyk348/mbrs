@@ -148,6 +148,16 @@ mod tests {
     }
 
     #[test]
+    fn demo_loads_by_relative_path_from_the_crate_root() {
+        // именно так приложение грузит проект из аргумента командной строки
+        let p = Project::load("examples/demo.mbw");
+        match &p {
+            Ok(v) => assert_eq!(v.groups.len(), 3),
+            Err(e) => panic!("Project::load(examples/demo.mbw) вернул ошибку: {e}"),
+        }
+    }
+
+    #[test]
     fn roundtrip() {
         let p = Project::default();
         let s = serde_json::to_string(&p).unwrap();

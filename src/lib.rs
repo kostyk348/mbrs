@@ -8,6 +8,7 @@ pub mod grid;
 pub mod logging;
 pub mod modbus;
 pub mod names;
+pub mod paths;
 pub mod scada;
 pub mod scan;
 pub mod store;

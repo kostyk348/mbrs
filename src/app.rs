@@ -163,7 +163,7 @@ impl MbApp {
             selected: None,
             edit_cell: None,
             write_buf: String::new(),
-            path_buf: "/home/lain/mbrs-workspace.mbw".into(),
+            path_buf: mbrs::paths::default_path("workspace.mbw"),
             status: "ready".into(),
             active_group: 0,
             sel_tile: None,
@@ -196,7 +196,7 @@ impl MbApp {
             names: Names::default(),
             new_name_key: 0,
             new_name_val: String::new(),
-            names_path: "/home/lain/mbrs-names.txt".into(),
+            names_path: mbrs::paths::default_path("names.txt"),
             log: LogConfig::default(),
             logw: LogWriter::new(),
             last_log: Instant::now(),
@@ -224,6 +224,11 @@ impl MbApp {
     }
 
     fn project_open(&mut self) {
+        // Пустой стартовый путь — это не ошибка: у нового пользователя файла ещё нет.
+        if !std::path::Path::new(&self.path_buf).exists() {
+            self.status = format!("файла пока нет: {}", self.path_buf);
+            return;
+        }
         match Project::load(&self.path_buf) {
             Ok(p) => {
                 self.project = p;
