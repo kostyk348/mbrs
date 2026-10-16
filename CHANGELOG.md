@@ -3,6 +3,21 @@
 Notable changes to `mbrs` (Modbus Studio). Version numbers follow the git tags; a tag must match
 `version` in `Cargo.toml` — the release workflow refuses to publish otherwise.
 
+## [0.1.1] — 2026-10-16
+
+### Fixed
+- Ячейки снова правятся: у клеток появился стабильный `Id` (без него egui не считал двойной клик
+  двойным), плюс правка через `F2` и «печать поверх выбранной клетки».
+- Приложение больше не лезет в сеть при запуске: опрос начинается только по кнопке Connect,
+  которая стала тумблером Connect/Disconnect.
+- Файлы Modbus Poll (`*.mbp`/`*.mbw`, бинарный формат) больше не выдают загадочное
+  «expected value at line 1 column 1» — теперь сказано, что это за формат.
+- Убраны зашитые линуксовые пути `/home/lain/...` (под Windows диалоги открывались в пустой папке).
+
+### Changed
+- `cargo clippy --all-targets` — 0 предупреждений (было 1 ошибка + 13 предупреждений);
+  найден настоящий баг `b % 1 == 0` в диалоге битовых имён.
+
 ## [0.1.0] — 2026-10-16
 
 First tagged release: the desktop application, the shared core and the test suite that runs on a

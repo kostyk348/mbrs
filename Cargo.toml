@@ -1,6 +1,6 @@
 [package]
 name = "mbrs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "mbrs — Modbus Studio. Rust Modbus master (SCADA-style) with N-rule 32-colour cell mapping."
 license = "MIT OR Apache-2.0"
