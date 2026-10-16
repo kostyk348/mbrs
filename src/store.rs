@@ -783,8 +783,8 @@ fn do_scan_address(
     end: u16,
 ) {
     t.cfg.unit = unit;
-    let mut a = start;
-    loop {
+    let mut win = crate::scan::ScanWindow::new(start, end);
+    while let Some(a) = win.next_value() {
         if cancel.load(Ordering::SeqCst) {
             break;
         }
@@ -808,10 +808,6 @@ fn do_scan_address(
                 Err(_) => s.scan.errors += 1,
             }
         }
-        if a == end || a == u16::MAX {
-            break;
-        }
-        a = a.wrapping_add(1);
     }
 }
 
@@ -824,7 +820,9 @@ fn do_scan_slave(
     start: u8,
     end: u8,
 ) {
-    for u in start..=end {
+    let mut win = crate::scan::ScanWindow::new(u16::from(start), u16::from(end));
+    while let Some(unit_id) = win.next_value() {
+        let u = unit_id as u8;
         if cancel.load(Ordering::SeqCst) {
             break;
         }

@@ -2503,6 +2503,13 @@ fn draw_scan(ui: &mut egui::Ui, snap: &Snap) {
         snap.scan.found.len(),
         snap.scan.errors
     ));
+    if !snap.scan.found.is_empty() {
+        // Диапазоны вместо простыни одинаковых строк: «отвечают 0–19, 22, 40–47».
+        ui.label(format!(
+            "found: {}",
+            mbrs::scan::summary_text(&snap.scan.found)
+        ));
+    }
     ui.separator();
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (a, v) in &snap.scan.found {

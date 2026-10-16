@@ -9,5 +9,6 @@ pub mod logging;
 pub mod modbus;
 pub mod names;
 pub mod scada;
+pub mod scan;
 pub mod store;
 pub mod workspace;
