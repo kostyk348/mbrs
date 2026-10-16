@@ -869,6 +869,13 @@ impl MbApp {
             let (c, s, a) = (m.ctrl, m.shift, m.alt);
             match (k, c, s, a) {
                 (Key::F3, false, false, false) => self.modal = Modal::Connection,
+                // F2 — править выбранную ячейку прямо в таблице (как в Excel; в Modbus Poll
+                // мышью по двойному клику). Работает и там, где двойной клик капризен.
+                (Key::F2, false, false, false) => {
+                    if let Some(k) = self.selected {
+                        self.edit_cell = Some(k);
+                    }
+                }
                 (Key::F4, false, false, false) | (Key::F5, false, false, false) => {
                     self.restart_worker()
                 }
@@ -1107,6 +1114,12 @@ impl MbApp {
                                                 bg,
                                                 fg,
                                                 self.selected == Some(key),
+                                                egui::Id::new((
+                                                    "mbrs.cell",
+                                                    key.unit,
+                                                    key.fc,
+                                                    key.addr,
+                                                )),
                                             );
                                             if resp.clicked() {
                                                 self.selected = Some(key);
@@ -1208,6 +1221,12 @@ impl MbApp {
                                                         bg,
                                                         fg,
                                                         self.selected == Some(key),
+                                                        egui::Id::new((
+                                                            "mbrs.cell",
+                                                            key.unit,
+                                                            key.fc,
+                                                            key.addr,
+                                                        )),
                                                     );
                                                     if resp.clicked() {
                                                         self.selected = Some(key);
@@ -2534,8 +2553,12 @@ fn draw_cell(
     bg: [u8; 3],
     fg: [u8; 3],
     selected: bool,
+    id: egui::Id,
 ) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::hover());
+    // Стабильный Id обязателен: без него egui выводит id из места виджета в раскладке, и при
+    // виртуализации/прокрутке он «плывёт» — два щелчка по одной клетке не считаются двойным.
+    let resp = ui.interact(rect, id, egui::Sense::click());
     let p = ui.painter();
     p.rect_filled(rect, 3.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
     if selected {
