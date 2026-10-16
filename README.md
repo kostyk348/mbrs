@@ -11,6 +11,14 @@ engine and a SCADA-style dashboard.
 > Independent reimplementation. No code from Modbus Poll is used or included.
 > The original is proprietary (MFC/C++, x64, COFF/PE). See `docs/RE-NOTES.md`.
 
+## Screenshot
+
+![mbrs with the demo workspace: three poll groups, the virtualised register grid and the colour engine](docs/images/ui-grid.png)
+
+The window above is the running application with `examples/demo.mbw` (three groups: holding
+registers, coils, and a scaled temperature range). Double-click a value cell to edit it in place:
+Enter writes it to the device (FC 05/06/16), Esc cancels.
+
 ## Features
 
 ### Protocol (implemented from scratch)
