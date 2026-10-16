@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "mbrs — Modbus Studio. Rust Modbus master (SCADA-style) with N-rule 32-colour cell mapping."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/kostyk348/mbrs"
+readme = "README.md"
+keywords = ["modbus", "scada", "plc", "egui", "industrial"]
+categories = ["gui", "hardware-support", "network-programming"]
+rust-version = "1.80"
 
 [lib]
 name = "mbrs"

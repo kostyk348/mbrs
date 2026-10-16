@@ -1,0 +1,225 @@
+{
+  "version": 2,
+  "conn": {
+    "mode": "Tcp",
+    "host": "127.0.0.1",
+    "port": 502,
+    "serial_port": "COM3",
+    "baud": 9600,
+    "data_bits": 8,
+    "parity": "N",
+    "stop_bits": 1,
+    "timeout_ms": 1000,
+    "unit": 1
+  },
+  "groups": [
+    {
+      "id": 1,
+      "unit": 1,
+      "fc": 3,
+      "start": 0,
+      "count": 10,
+      "scan_ms": 1000,
+      "enabled": true,
+      "format": "U16",
+      "color": {
+        "mode": "Rules",
+        "normal_bg": [
+          30,
+          32,
+          38
+        ],
+        "normal_fg": [
+          220,
+          220,
+          220
+        ],
+        "auto_fg": true,
+        "rules": [],
+        "ramp_lo": 0.0,
+        "ramp_hi": 100.0,
+        "levels": 32,
+        "palette": "Traffic"
+      },
+      "scale": {
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 100.0,
+        "y2": 100.0,
+        "decimals": 2,
+        "enabled": false
+      },
+      "name": "Holding 0-9",
+      "chart": true
+    },
+    {
+      "id": 2,
+      "unit": 1,
+      "fc": 1,
+      "start": 0,
+      "count": 16,
+      "scan_ms": 500,
+      "enabled": true,
+      "format": "U16",
+      "color": {
+        "mode": "Rules",
+        "normal_bg": [
+          30,
+          32,
+          38
+        ],
+        "normal_fg": [
+          220,
+          220,
+          220
+        ],
+        "auto_fg": true,
+        "rules": [],
+        "ramp_lo": 0.0,
+        "ramp_hi": 100.0,
+        "levels": 32,
+        "palette": "Traffic"
+      },
+      "scale": {
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 100.0,
+        "y2": 100.0,
+        "decimals": 2,
+        "enabled": false
+      },
+      "name": "Coils 0-15",
+      "chart": false
+    },
+    {
+      "id": 3,
+      "unit": 1,
+      "fc": 3,
+      "start": 100,
+      "count": 8,
+      "scan_ms": 2000,
+      "enabled": true,
+      "format": "U16",
+      "color": {
+        "mode": "Rules",
+        "normal_bg": [
+          30,
+          32,
+          38
+        ],
+        "normal_fg": [
+          220,
+          220,
+          220
+        ],
+        "auto_fg": true,
+        "rules": [],
+        "ramp_lo": 0.0,
+        "ramp_hi": 100.0,
+        "levels": 32,
+        "palette": "Traffic"
+      },
+      "scale": {
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 1000.0,
+        "y2": 100.0,
+        "decimals": 1,
+        "enabled": true
+      },
+      "name": "Temperature (scaled)",
+      "chart": true
+    }
+  ],
+  "tiles": [
+    {
+      "id": 1,
+      "kind": "Value",
+      "unit": 1,
+      "fc": 3,
+      "addr": 0,
+      "format": "U16",
+      "label": "Reg 0",
+      "unit_text": "",
+      "x": 0.02,
+      "y": 0.02,
+      "w": 0.22,
+      "h": 0.16,
+      "lo": 0.0,
+      "hi": 100.0,
+      "color": {
+        "mode": "Rules",
+        "normal_bg": [
+          30,
+          32,
+          38
+        ],
+        "normal_fg": [
+          220,
+          220,
+          220
+        ],
+        "auto_fg": true,
+        "rules": [],
+        "ramp_lo": 0.0,
+        "ramp_hi": 100.0,
+        "levels": 32,
+        "palette": "Traffic"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "Gauge",
+      "unit": 1,
+      "fc": 3,
+      "addr": 100,
+      "format": "U16",
+      "label": "Temp",
+      "unit_text": "",
+      "x": 0.02,
+      "y": 0.02,
+      "w": 0.22,
+      "h": 0.16,
+      "lo": 0.0,
+      "hi": 100.0,
+      "color": {
+        "mode": "Rules",
+        "normal_bg": [
+          30,
+          32,
+          38
+        ],
+        "normal_fg": [
+          220,
+          220,
+          220
+        ],
+        "auto_fg": true,
+        "rules": [],
+        "ramp_lo": 0.0,
+        "ramp_hi": 100.0,
+        "levels": 32,
+        "palette": "Traffic"
+      }
+    }
+  ],
+  "names": {
+    "value": {
+      "0": "Ready",
+      "1": "Running",
+      "2": "Fault"
+    },
+    "bits": {
+      "0": "Motor on",
+      "1": "Alarm"
+    }
+  },
+  "log": {
+    "enabled": false,
+    "path": "/home/lain/mbrs-log.csv",
+    "format": "Csv",
+    "interval_ms": 1000,
+    "policy": "Continue",
+    "append": true
+  }
+}

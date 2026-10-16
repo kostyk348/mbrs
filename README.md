@@ -1,4 +1,8 @@
 # mbrs — Modbus Studio (Rust)
+[![ci](https://github.com/kostyk348/mbrs/actions/workflows/ci.yml/badge.svg)](https://github.com/kostyk348/mbrs/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/kostyk348/mbrs?sort=semver)](https://github.com/kostyk348/mbrs/releases)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+
 
 A from-scratch Modbus master / monitor written in Rust, inspired by the feature
 surface of *Modbus Poll* (Witte Software) but with a far stronger value→colour
@@ -44,6 +48,14 @@ drive them — so a human never has to read raw register tables.
 - JSON workspace save/load; CSV export.
 - Per-group scan rate, enable/disable, error & timeout counters.
 
+## Download
+
+Prebuilt binaries are attached to every tagged release — `.zip` for Windows (x86_64-pc-windows-msvc)
+and `.tar.gz` for Linux (x86_64-unknown-linux-gnu) and macOS (aarch64-apple-darwin), with
+`SHA256SUMS.txt` next to them:
+
+<https://github.com/kostyk348/mbrs/releases>
+
 ## Build & run
 ```sh
 cargo run --release
@@ -52,10 +64,22 @@ Linux needs GTK3 development headers for the **native file dialog** (`rfd`, `gtk
 ```sh
 sudo apt install libgtk-3-dev     # Arch/Artix: pacman -S gtk3
 ```
-Test suite:
+Test suite and the usual developer checks:
 ```sh
-cargo test
+cargo test          # 23 unit tests, no hardware and no Modbus slave needed
+cargo fmt --all -- --check
+cargo clippy --all-targets
 ```
+
+The demo workspace used by the tests and for a quick smoke run is generated, not hand-edited:
+
+```sh
+cargo run --example gen_demo     # rewrites examples/demo.mbw
+cargo run --release -- examples/demo.mbw
+```
+
+Design notes for the UI work live in `docs/EGUI-PLAN.md` (egui practices, three layout options,
+and the order of work).
 
 ## Layout
 ```
