@@ -1220,7 +1220,7 @@ impl MbApp {
                 tr,
                 6.0,
                 Stroke::new(
-                    if self.sel_tile == Some(i) { 2.5 } else { 1.0 },
+                    if self.sel_tile == Some(i) { 2.5_f32 } else { 1.0_f32 },
                     if self.sel_tile == Some(i) {
                         Color32::from_rgb(90, 160, 255)
                     } else {
@@ -1264,7 +1264,7 @@ impl MbApp {
                 TileKind::Lamp => {
                     let r = tr.height().min(tr.width()) * 0.22;
                     p.circle_filled(tr.center() + egui::vec2(0.0, 6.0), r, bgc);
-                    p.circle_stroke(tr.center() + egui::vec2(0.0, 6.0), r, Stroke::new(2.0, fgc));
+                    p.circle_stroke(tr.center() + egui::vec2(0.0, 6.0), r, Stroke::new(2.0_f32, fgc));
                     p.text(
                         tr.center() + egui::vec2(0.0, r + 18.0),
                         Align2::CENTER_CENTER,
@@ -1290,7 +1290,7 @@ impl MbApp {
                         egui::vec2(inner.width() * frac, inner.height()),
                     );
                     p.rect_filled(fill, 3.0, bgc);
-                    p.rect_stroke(inner, 3.0, Stroke::new(1.0, Color32::from_rgb(70, 70, 80)));
+                    p.rect_stroke(inner, 3.0, Stroke::new(1.0_f32, Color32::from_rgb(70, 70, 80)));
                     p.text(
                         tr.center() + egui::vec2(0.0, 6.0),
                         Align2::CENTER_CENTER,
@@ -1360,7 +1360,7 @@ impl MbApp {
         for w in pts.windows(2) {
             p.line_segment(
                 [w[0], w[1]],
-                Stroke::new(1.5, Color32::from_rgb(90, 200, 255)),
+                Stroke::new(1.5_f32, Color32::from_rgb(90, 200, 255)),
             );
         }
         p.text(
@@ -2361,7 +2361,7 @@ fn setup_style(ctx: &egui::Context) {
     v.extreme_bg_color = Color32::from_rgb(15, 17, 21);
     v.faint_bg_color = Color32::from_rgb(33, 36, 43);
     v.selection.bg_fill = accent;
-    v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+    v.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
     v.window_rounding = egui::Rounding::same(8.0);
     v.menu_rounding = egui::Rounding::same(8.0);
     v.widgets.noninteractive.bg_fill = Color32::from_rgb(30, 33, 40);
@@ -2421,7 +2421,7 @@ fn draw_cell(
     let p = ui.painter();
     p.rect_filled(rect, 3.0, Color32::from_rgb(bg[0], bg[1], bg[2]));
     if selected {
-        p.rect_stroke(rect, 3.0, Stroke::new(2.0, Color32::from_rgb(90, 160, 255)));
+        p.rect_stroke(rect, 3.0, Stroke::new(2.0_f32, Color32::from_rgb(90, 160, 255)));
     }
     p.text(
         rect.center(),
@@ -2454,7 +2454,7 @@ fn swatches(ui: &mut egui::Ui, cur: &mut [u8; 3]) {
                 .rect_filled(rect, 2.0, Color32::from_rgb(c[0], c[1], c[2]));
             if *cur == *c {
                 ui.painter()
-                    .rect_stroke(rect, 2.0, Stroke::new(2.0, Color32::WHITE));
+                    .rect_stroke(rect, 2.0, Stroke::new(2.0_f32, Color32::WHITE));
             }
             if resp.clicked() {
                 *cur = *c;

@@ -88,6 +88,8 @@ src/formats.rs  28 display formats + scaling/parse
 src/colors.rs   rules + 32-level/smooth ramps + palettes
 src/scada.rs    tile model + auto-layout
 src/store.rs    shared snapshot + polling worker thread
+src/scan.rs     address/slave scan: inclusive sweep + contiguous-range summary
+src/grid.rs     virtualised grid geometry (only the visible rows are built)
 src/workspace.rs project (JSON) persistence
 src/app.rs      egui UI: menus, grid, colour editor, SCADA canvas, chart, traffic,
                 scan, test center, full dialog set + shortcuts

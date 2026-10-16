@@ -25,7 +25,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 serialport = "4.6"
-rfd = { version = "0.15", default-features = false, features = ["gtk3"] }
+# Linux-бэкенд выбора файлов — через XDG Desktop Portal, а не через GTK3: так сборка
+# не требует libgtk-3-dev (из-за него CI был красным: glib-sys не собирался), и на Wayland
+# диалоги ведут себя нативно. Windows/macOS используют свои нативные диалоги.
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
 
 [profile.release]
 opt-level = 2
