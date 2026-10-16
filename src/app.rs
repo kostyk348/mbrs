@@ -850,6 +850,28 @@ impl eframe::App for MbApp {
 
 impl MbApp {
     fn shortcuts(&mut self, ctx: &egui::Context, pending: &mut Vec<Cmd>) {
+        // Как в Excel и Modbus Poll: выбрал клетку и начал печатать — редактор открывается сам.
+        // Это самый естественный путь правки и он не зависит от двойного клика.
+        if self.edit_cell.is_none() {
+            if let Some(k) = self.selected {
+                let typed = ctx.input(|i| {
+                    i.events.iter().find_map(|e| match e {
+                        egui::Event::Text(t)
+                            if !t.is_empty()
+                                && t.chars()
+                                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') =>
+                        {
+                            Some(t.clone())
+                        }
+                        _ => None,
+                    })
+                });
+                if let Some(t) = typed {
+                    self.edit_cell = Some(k);
+                    self.write_buf = t;
+                }
+            }
+        }
         let mut keys: Vec<(Key, Modifiers)> = Vec::new();
         ctx.input(|i| {
             for ev in &i.events {
