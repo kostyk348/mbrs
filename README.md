@@ -4,6 +4,9 @@
 
 # mbrs — Modbus Studio (Rust)
 
+> [!WARNING]
+> **Архивировано.** Проект переименован и переписан: активная разработка идёт в [**mbSCADA**](https://github.com/kostyk348/mbscada-rs) (Rust + Tauri 2). Этот репозиторий оставлен как read-only история.
+
 ### A from-scratch Modbus master / monitor written in Rust, inspired by the feature surface of *Modbus Poll* (Witte Software) but with a far stronger…
 
 [![ci](https://github.com/kostyk348/mbrs/actions/workflows/build.yml/badge.svg)](https://github.com/kostyk348/mbrs/actions/workflows/build.yml)
