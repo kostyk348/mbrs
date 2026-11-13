@@ -1,13 +1,22 @@
+<div align="center">
+
+<img src="docs/banner.svg" alt="mbrs banner" width="1000">
+
 # mbrs — Modbus Studio (Rust)
+
+### A from-scratch Modbus master / monitor written in Rust, inspired by the feature surface of *Modbus Poll* (Witte Software) but with a far stronger…
 
 [![ci](https://github.com/kostyk348/mbrs/actions/workflows/build.yml/badge.svg)](https://github.com/kostyk348/mbrs/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/kostyk348/mbrs?sort=semver)](https://github.com/kostyk348/mbrs/releases)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![Last commit](https://img.shields.io/github/last-commit/kostyk348/mbrs?branch=main)](https://github.com/kostyk348/mbrs/commits/main)
 
-A from-scratch Modbus master / monitor written in Rust, inspired by the feature
-surface of *Modbus Poll* (Witte Software) but with a far stronger value→colour
-engine and a SCADA-style dashboard.
+![mbrs with the demo workspace: three poll groups, the virtualised register grid and the colour engine](docs/images/ui-grid.png)
+
+</div>
+
+---
+
 
 > Independent reimplementation. No code from Modbus Poll is used or included.
 > The original is proprietary (MFC/C++, x64, COFF/PE). See `docs/RE-NOTES.md`.
